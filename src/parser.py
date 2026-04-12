@@ -104,19 +104,29 @@ class AuthLogParser:
 
         # Conversión a datetime y corrección de año
         try:
-            df['datetime'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            # Especificar formato para syslog estándar para mayor robustez en CI
+            # Los formatos comunes son "Oct 11 10:00:00" (%b %d %H:%M:%S)
+            df['datetime'] = pd.to_datetime(df['timestamp'], format='%b %d %H:%M:%S', errors='coerce')
             
-            if df['datetime'].isna().any():
-                invalid_dates = df[df['datetime'].isna()]
-                logger.warning(f"Se detectaron {len(invalid_dates)} timestamps ilegibles que serán ignorados.")
+            # Fallback si no pudo parsear con el formato explícito (ej. formatos no estándar)
+            if df['datetime'].isna().all():
+                df['datetime'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-            current_year = pd.Timestamp.now().year
-            df['datetime'] = df['datetime'].apply(
-                lambda x: x.replace(year=current_year) if pd.notnull(x) and x.year == 1900 else x
-            )
+            # Limpieza: Dropear filas que no tienen fecha válida (no se pueden analizar por reglas de tiempo)
+            if df['datetime'].isna().any():
+                count_na = df['datetime'].isna().sum()
+                df = df.dropna(subset=['datetime']).copy()
+                logger.warning(f"Se eliminaron {count_na} registros con timestamps ilegibles.")
+
+            if not df.empty:
+                current_year = pd.Timestamp.now().year
+                df['datetime'] = df['datetime'].apply(
+                    lambda x: x.replace(year=current_year) if pd.notnull(x) and x.year == 1900 else x
+                )
         except Exception as e:
             logger.error(f"Error procesando la columna de fechas: {e}")
-            df['datetime'] = pd.NaT
+            # Si hay un error catastrófico en la conversión, devolvemos un DF vacío para evitar crasheos posteriores
+            return pd.DataFrame(columns=['timestamp', 'datetime', 'ip_origen', 'usuario', 'accion', 'status'])
 
         return df
 

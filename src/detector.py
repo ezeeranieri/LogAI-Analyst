@@ -41,30 +41,38 @@ class BruteForceRule(DetectionRule):
         Detecta más de 5 intentos fallidos desde una misma IP en 1 minuto.
         Asume que los intentos ya están estructurados en el DataFrame.
         """
-        if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns:
-            return pd.DataFrame()
-            
-        # Usamos la columna 'status' normalizada por el parser
-        df_failed = df[df['status'] == 'FAIL'].copy()
-        
-        anomalies = []
-        # Agrupar por IP para analizar ventanas de tiempo
-        for ip, group in df_failed.groupby('ip_origen'):
-            group = group.set_index('datetime').sort_index()
-            
-            # Contar la suma de fallos en ventanas móviles de 1 minuto
-            counts = group['accion'].rolling('1min').count()
-            
-            # Filtrar lugares donde el contador es mayor estricto a 5 (es decir, > 5)
-            mask_over = counts > 5
-            if mask_over.any():
-                # Obtenemos las filas específicas donde se detecta la sobrecarga de fuerza bruta
-                anomalous_rows = group[mask_over].copy()
-                anomalous_rows['razon'] = f"{self.rule_name} (>5 fallos por min)"
-                anomalies.append(anomalous_rows.reset_index())
+        try:
+            if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns:
+                return pd.DataFrame()
                 
-        if anomalies:
-            return pd.concat(anomalies, ignore_index=True)
+            # Usamos la columna 'status' normalizada por el parser
+            df_failed = df[df['status'] == 'FAIL'].copy()
+            
+            if df_failed.empty:
+                return pd.DataFrame()
+
+            anomalies = []
+            # Agrupar por IP para analizar ventanas de tiempo
+            for ip, group in df_failed.groupby('ip_origen'):
+                # Asegurar orden cronológico para rolling index
+                group = group.set_index('datetime').sort_index()
+                
+                # Contar la suma de fallos en ventanas móviles de 1 minuto
+                # rolling() requiere un índice de tipo datetime.
+                counts = group['accion'].rolling('1min').count()
+                
+                # Filtrar lugares donde el contador es mayor estricto a 5 (es decir, > 5)
+                mask_over = counts > 5
+                if mask_over.any():
+                    # Obtenemos las filas específicas donde se detecta la sobrecarga de fuerza bruta
+                    anomalous_rows = group[mask_over].copy()
+                    anomalous_rows['razon'] = f"{self.rule_name} (>5 fallos por min)"
+                    anomalies.append(anomalous_rows.reset_index())
+                    
+            if anomalies:
+                return pd.concat(anomalies, ignore_index=True)
+        except Exception as e:
+            logger.error(f"Error en regla {self.rule_name}: {e}")
             
         return pd.DataFrame()
 
@@ -81,23 +89,26 @@ class TimeAnomalyRule(DetectionRule):
         
     def evaluate(self, df: pd.DataFrame) -> pd.DataFrame:
         """Detecta accesos logueados ("exitosos") fuera del horario laboral."""
-        if df.empty or 'datetime' not in df.columns:
-            return pd.DataFrame()
+        try:
+            if df.empty or 'datetime' not in df.columns:
+                return pd.DataFrame()
 
-        # Usamos la columna 'status' normalizada
-        df_success = df[df['status'] == 'SUCCESS'].copy()
-        
-        if df_success.empty:
-            return pd.DataFrame()
+            # Usamos la columna 'status' normalizada
+            df_success = df[df['status'] == 'SUCCESS'].copy()
             
-        # Verificar el horario (usamos datetime)
-        hour = df_success['datetime'].dt.hour
-        out_of_hours_mask = (hour < self.start_hour) | (hour >= self.end_hour)
-        
-        df_anomalies = df_success[out_of_hours_mask].copy()
-        if not df_anomalies.empty:
-            df_anomalies['razon'] = f"{self.rule_name} (Acceso fuera de horario laboral)"
-            return df_anomalies
+            if df_success.empty:
+                return pd.DataFrame()
+                
+            # Verificar el horario (usamos datetime)
+            hour = df_success['datetime'].dt.hour
+            out_of_hours_mask = (hour < self.start_hour) | (hour >= self.end_hour)
+            
+            df_anomalies = df_success[out_of_hours_mask].copy()
+            if not df_anomalies.empty:
+                df_anomalies['razon'] = f"{self.rule_name} (Acceso fuera de horario laboral)"
+                return df_anomalies
+        except Exception as e:
+            logger.error(f"Error en regla {self.rule_name}: {e}")
             
         return pd.DataFrame()
 
@@ -112,28 +123,31 @@ class UserProbingRule(DetectionRule):
         Detecta si una misma IP intenta acceder a más de 3 usuarios distintos 
         en un intervalo de 10 minutos.
         """
-        if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns or 'usuario' not in df.columns:
-            return pd.DataFrame()
-            
-        anomalies = []
-        # Agrupar por IP para analizar la diversidad de usuarios
-        for ip, group in df.groupby('ip_origen'):
-            group = group.set_index('datetime').sort_index()
-            
-            # Cálculo de usuarios únicos en la ventana de 10 min (soporta strings)
-            unique_users = [
-                len(set(group.loc[t - pd.Timedelta('10min'):t, 'usuario']))
-                for t in group.index
-            ]
-            
-            mask_probe = pd.Series(unique_users, index=group.index) > 3
-            if mask_probe.any():
-                anomalous_rows = group[mask_probe].copy()
-                anomalous_rows['razon'] = f"{self.rule_name}: Múltiples cuentas desde una misma IP"
-                anomalies.append(anomalous_rows.reset_index())
+        try:
+            if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns or 'usuario' not in df.columns:
+                return pd.DataFrame()
                 
-        if anomalies:
-            return pd.concat(anomalies, ignore_index=True)
+            anomalies = []
+            # Agrupar por IP para analizar la diversidad de usuarios
+            for ip, group in df.groupby('ip_origen'):
+                group = group.set_index('datetime').sort_index()
+                
+                # Cálculo de usuarios únicos en la ventana de 10 min (soporta strings)
+                unique_users = [
+                    len(set(group.loc[t - pd.Timedelta('10min'):t, 'usuario']))
+                    for t in group.index
+                ]
+                
+                mask_probe = pd.Series(unique_users, index=group.index) > 3
+                if mask_probe.any():
+                    anomalous_rows = group[mask_probe].copy()
+                    anomalous_rows['razon'] = f"{self.rule_name}: Múltiples cuentas desde una misma IP"
+                    anomalies.append(anomalous_rows.reset_index())
+                    
+            if anomalies:
+                return pd.concat(anomalies, ignore_index=True)
+        except Exception as e:
+            logger.error(f"Error en regla {self.rule_name}: {e}")
             
         return pd.DataFrame()
 

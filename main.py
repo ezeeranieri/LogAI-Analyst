@@ -102,8 +102,11 @@ async def analyze_logs(
         )
 
     except Exception as e:
-        logger.error(f"Error procesando análisis: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor.")
+        logger.error(f"Error crítico en endpoint /analyze: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno del servidor: {type(e).__name__}"
+        )
     
     finally:
         # 7. Limpieza delegada
