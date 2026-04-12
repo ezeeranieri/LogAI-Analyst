@@ -2,6 +2,12 @@
 
 Professional AI-powered security analysis tool built with Python and FastAPI for proactive threat detection in system logs (Syslog / Auth.log).
 
+## Requirements
+
+- Python 3.10+
+- Docker (recommended)
+- `pip install -r requirements.txt`
+
 ## Production Features
 
 - **Authentication (NEW)**: Security enforced via `X-API-KEY` header in every request.
@@ -68,5 +74,3 @@ The project includes an integration test suite to validate the authentication fl
 python -m pytest
 ```
 
----
-**Certified as 100% "Production Ready". Decoupled architecture and defense-in-depth security.**
