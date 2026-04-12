@@ -43,6 +43,8 @@ EXPOSE 8000
 # Variables de entorno para producción
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV APP_HOST=0.0.0.0
+ENV APP_PORT=8000
 
 # Comando para iniciar la aplicación con Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host $APP_HOST --port $APP_PORT"]

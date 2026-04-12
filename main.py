@@ -5,7 +5,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from src.parser import AuthLogParser
 from src.detector import LogDetector, BruteForceRule, TimeAnomalyRule, IADetectorRule, UserProbingRule
-from src.config import ABS_DATA_DIR, LOG_FILE, API_KEY
+from src.config import ABS_DATA_DIR, LOG_FILE, API_KEY, APP_HOST, APP_PORT
 from src.utils import FileManager
 
 # Constantes de Producción
@@ -112,4 +112,4 @@ async def analyze_logs(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT)

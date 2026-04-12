@@ -24,6 +24,8 @@ Create a `.env` file in the root directory with the following variables:
 DATA_DIR=data
 API_KEY=your_super_secure_secret
 LOG_FILE=app_production.log
+APP_HOST=127.0.0.1
+APP_PORT=8000
 ```
 
 ### Running with Docker (Recommended)
