@@ -1,6 +1,7 @@
 # LogAI-Analyst
 
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=ezeeranieri_LogAI-Analyst)](https://sonarcloud.io/summary/new_code?id=ezeeranieri_LogAI-Analyst)
+[![codecov](https://codecov.io/github/ezeeranieri/LogAI-Analyst/graph/badge.svg?token=SV1EA30KXW)](https://codecov.io/github/ezeeranieri/LogAI-Analyst)
 
 Professional AI-powered security analysis tool built with Python and FastAPI for proactive threat detection in system logs (Syslog / Auth.log).
 
