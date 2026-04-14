@@ -33,6 +33,8 @@ APP_PORT=8000
 
 ### Initial Model Training (NEW)
 Before running the API for the first time, you must train the AI anomaly detection model:
+
+**Note:** `train_model.py` must be run from the project root directory:
 ```bash
 python train_model.py
 ```

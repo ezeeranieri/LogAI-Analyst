@@ -5,7 +5,7 @@ import logging
 import pandas as pd
 from typing import List, Optional
 from abc import ABC, abstractmethod
-from src.config import MODEL_PATH
+from .config import MODEL_PATH
 
 # Logger local
 logger = logging.getLogger(__name__)
