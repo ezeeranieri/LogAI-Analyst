@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 from main import app
 from src.config import API_KEY
 
-# IPs de prueba claramente marcadas para evitar hotspots de SonarCloud
-TEST_IP_1 = "1.1.1.1"
-TEST_IP_2 = "1.1.1.2"
+# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+TEST_IP_1 = "192.0.2.1"
+TEST_IP_2 = "192.0.2.2"
 
 client = TestClient(app)
 HEADERS = {"X-API-KEY": API_KEY}

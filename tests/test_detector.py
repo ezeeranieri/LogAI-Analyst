@@ -3,9 +3,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 from src.detector import LogDetector, BruteForceRule, UserProbingRule
 
-# IP de prueba claramente marcada para evitar hotspots de SonarCloud
-TEST_IP_BRUTE_FORCE = "1.2.3.4"
-TEST_IP_USER_PROBING = "192.168.1.50"
+# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+TEST_IP_BRUTE_FORCE = "192.0.2.1"
+TEST_IP_USER_PROBING = "192.0.2.2"
 
 def test_brute_force_detection():
     """

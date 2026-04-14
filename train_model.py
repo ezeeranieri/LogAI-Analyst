@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 from src.config import MODEL_PATH
 
-# --- Test Data Constants ---
-# Clearly marked as non-production, synthetic data IPs for SonarCloud compliance
-SYNTHETIC_NORMAL_IPS = ["192.168.1.10", "192.168.1.11", "10.0.0.5", "172.16.0.20"]
-SYNTHETIC_ANOMALY_IPS = ["45.33.22.11", "185.10.2.3", "200.5.6.7"]
+# --- Training Data Constants ---
+# IPs sintéticas — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+SYNTHETIC_NORMAL_IPS = ["192.0.2.10", "192.0.2.11", "192.0.2.12", "192.0.2.13"]
+SYNTHETIC_ANOMALY_IPS = ["192.0.2.100", "192.0.2.101", "192.0.2.102"]
 
 def generate_synthetic_data(n_samples=1500):
     """

@@ -2,9 +2,9 @@ import pytest
 import pandas as pd
 from src.parser import AuthLogParser
 
-# IPs de prueba para evitar hotspots de SonarCloud
-TEST_IP_FAIL = "192.168.1.1"
-TEST_IP_SUCCESS = "10.0.0.5"
+# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+TEST_IP_FAIL = "192.0.2.1"
+TEST_IP_SUCCESS = "192.0.2.2"
 
 def test_parse_single_line_failed(tmp_path):
     """
