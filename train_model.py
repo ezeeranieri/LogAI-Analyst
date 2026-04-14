@@ -1,4 +1,11 @@
 import os
+import sys
+
+# Add project root to path for imports when running from root directory
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import zlib
 import joblib
 import pandas as pd

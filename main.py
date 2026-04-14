@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Security, Depends
 from fastapi.security import APIKeyHeader
@@ -63,7 +64,6 @@ async def analyze_logs(
 
     # 2. Validación de extensión
     filename = file.filename
-    import os
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".log", ".txt", ""]:
         raise HTTPException(status_code=400, detail="Extensión no válida.")
