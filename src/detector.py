@@ -168,7 +168,6 @@ class IADetectorRule(DetectionRule):
         """
         try:
             from sklearn.ensemble import IsolationForest
-            from sklearn.preprocessing import LabelEncoder
         except ImportError:
             logger.warning("scikit-learn no encontrado. Se omite detección avanzada de IA.")
             return pd.DataFrame()
