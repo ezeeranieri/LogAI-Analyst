@@ -117,45 +117,75 @@ class UserProbingRule(DetectionRule):
     @property
     def rule_name(self) -> str:
         return "Sondeo de Usuarios"
-        
+
     def evaluate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Detecta si una misma IP intenta acceder a más de 3 usuarios distintos 
-        en un intervalo de 10 minutos.
+        Detecta si una misma IP intenta acceder a más de 3 usuarios distintos
+        en un intervalo de 10 minutos. Usa sliding window O(n) con two-pointer approach.
         """
         try:
             if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns or 'usuario' not in df.columns:
                 return pd.DataFrame()
-                
+
             anomalies = []
             # Agrupar por IP para analizar la diversidad de usuarios
             for ip, group in df.groupby('ip_origen'):
-                group = group.set_index('datetime').sort_index()
-                
-                # Cálculo de usuarios únicos en la ventana de 10 min (soporta strings)
-                unique_users = [
-                    len(set(group.loc[t - pd.Timedelta('10min'):t, 'usuario']))
-                    for t in group.index
-                ]
-                
-                mask_probe = pd.Series(unique_users, index=group.index) > 3
+                if len(group) < 4:
+                    continue
+
+                # Sort by datetime for sliding window
+                group_sorted = group.sort_values('datetime').reset_index(drop=True)
+                datetimes = group_sorted['datetime']
+                usuarios = group_sorted['usuario']
+
+                n = len(group_sorted)
+                window_unique_counts = []
+
+                # Sliding window: track unique users in current window
+                # Two-pointer approach: O(n) total
+                user_counts = {}
+                left = 0
+                current_unique = 0
+
+                for right in range(n):
+                    # Add right pointer user
+                    user_right = usuarios.iloc[right]
+                    user_counts[user_right] = user_counts.get(user_right, 0) + 1
+                    if user_counts[user_right] == 1:
+                        current_unique += 1
+
+                    # Move left pointer to maintain 10-minute window
+                    while left <= right and datetimes.iloc[right] - datetimes.iloc[left] > pd.Timedelta('10min'):
+                        user_left = usuarios.iloc[left]
+                        user_counts[user_left] -= 1
+                        if user_counts[user_left] == 0:
+                            current_unique -= 1
+                            del user_counts[user_left]
+                        left += 1
+
+                    window_unique_counts.append(current_unique)
+
+                window_unique = pd.Series(window_unique_counts, index=group_sorted.index)
+
+                mask_probe = window_unique > 3
                 if mask_probe.any():
-                    anomalous_rows = group[mask_probe].copy()
+                    anomalous_rows = group_sorted[mask_probe].copy()
                     anomalous_rows['razon'] = f"{self.rule_name}: Múltiples cuentas desde una misma IP"
-                    anomalies.append(anomalous_rows.reset_index())
-                    
+                    anomalies.append(anomalous_rows)
+
             if anomalies:
                 return pd.concat(anomalies, ignore_index=True)
         except Exception as e:
             logger.error(f"Error en regla {self.rule_name}: {e}")
-            
+
         return pd.DataFrame()
 
 
 class IADetectorRule(DetectionRule):
-    def __init__(self, contamination: float = 0.01, model_path: str = MODEL_PATH):
+    def __init__(self, contamination: float = 0.01, model_path: str = MODEL_PATH, model=None):
         self.contamination = contamination
         self.model_path = model_path
+        self.model = model  # Pre-loaded model to avoid reloading on each request
 
     @property
     def rule_name(self) -> str:
@@ -189,13 +219,16 @@ class IADetectorRule(DetectionRule):
         features['status_val'] = df_ml['status'].map(status_map).fillna(0.5)
 
         try:
-            if not os.path.exists(self.model_path):
-                logger.warning(f"Modelo IA no encontrado en {self.model_path}. Por favor, ejecute train_model.py primero.")
-                return pd.DataFrame()
+            model = self.model
+            if model is None:
+                if not os.path.exists(self.model_path):
+                    logger.warning(f"Modelo IA no encontrado en {self.model_path}. Por favor, ejecute train_model.py primero.")
+                    return pd.DataFrame()
+                model = joblib.load(self.model_path)
+                logger.info(f"Modelo IA cargado desde archivo {self.model_path}")
+            else:
+                logger.info("Modelo IA pre-cargado utilizado")
 
-            model = joblib.load(self.model_path)
-            logger.info(f"Modelo IA cargado exitosamente desde {self.model_path}")
-            
             predictions = model.predict(features)
             anomaly_mask = predictions == -1
             

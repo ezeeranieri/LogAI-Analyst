@@ -14,6 +14,7 @@ Professional AI-powered security analysis tool built with Python and FastAPI for
 ## Production Features
 
 - **Authentication (NEW)**: Security enforced via `X-API-KEY` header in every request.
+- **Rate Limiting (NEW)**: 10 requests per minute per IP on the `/analyze` endpoint using slowapi, to prevent abuse and DoS.
 - **Docker Hardening**: Secure execution using a non-privileged user (`appuser`).
 - **UUID Sanitization**: Unique temporary filenames for maximum security and path traversal prevention.
 - **Heuristic & AI Detection**: 4 layers of analysis (Brute Force, Time Anomalies, User Probing, and IA).
@@ -96,6 +97,7 @@ This project implements several architectural and security patterns to ensure re
 - **Isolation Forest for Anomaly Detection**: Unlike traditional rule-based systems, Isolation Forest is highly effective at detecting unknown threats (Zero-Day-like patterns). It isolates anomalies rather than profiling normal data, making it ideal for high-dimensional log data where patterns evolve over time.
 - **UUID for Temporary Files**: To prevent Path Traversal attacks and ensure file uniqueness, all uploaded logs are renamed to a version 4 UUID before processing. This sanitization step ensures that the application never trusts the client-provided filename.
 - **Modular Rules (Abstract Base Classes)**: The detection engine uses an inheritance-based architecture. By implementing the `DetectionRule` abstract class, developers can add new heuristic or AI rules without modifying the core processing logic (following the Open/Closed Principle).
+- **Two-Pointer Sliding Window for User Probing**: The `UserProbingRule` counts unique users within a 10-minute rolling window using a two-pointer sliding window algorithm with a dictionary-based frequency map. This achieves O(n) time complexity per IP group, where each element is processed at most twice (once by the right pointer, once by the left). The approach was chosen over `pandas.rolling().apply()` because `apply` with a Python lambda creates a new window slice and calls `len(set(x))` at each position, resulting in O(n²) time complexity. The sliding window maintains running counts incrementally, providing deterministic linear performance for high-volume log analysis.
 
 ## Frequently Asked Questions (FAQ)
 

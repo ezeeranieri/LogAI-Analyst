@@ -107,7 +107,7 @@ class AuthLogParser:
             # Especificar formato para syslog estándar para mayor robustez en CI
             # Los formatos comunes son "Oct 11 10:00:00" (%b %d %H:%M:%S)
             df['datetime'] = pd.to_datetime(df['timestamp'], format='%b %d %H:%M:%S', errors='coerce')
-            
+
             # Fallback si no pudo parsear con el formato explícito (ej. formatos no estándar)
             if df['datetime'].isna().all():
                 df['datetime'] = pd.to_datetime(df['timestamp'], errors='coerce')
@@ -119,9 +119,26 @@ class AuthLogParser:
                 logger.warning(f"Se eliminaron {count_na} registros con timestamps ilegibles.")
 
             if not df.empty:
-                current_year = pd.Timestamp.now().year
+                # Inferir año correctamente para evitar problemas de跨年
+                # Si el mes del log es posterior al mes actual, asumimos el año pasado
+                from datetime import datetime
+                current_date = datetime.now()
+
+                def infer_year(log_date, current_date):
+                    """Infiere el año correcto basado en la fecha actual y el mes del log."""
+                    if pd.isnull(log_date):
+                        return log_date
+                    # Si el mes del log es mayor que el mes actual, probablemente sea del año pasado
+                    # (ej: log de diciembre analizado en enero)
+                    log_month = log_date.month
+                    current_month = current_date.month
+                    if log_month > current_month:
+                        return log_date.replace(year=current_date.year - 1)
+                    else:
+                        return log_date.replace(year=current_date.year)
+
                 df['datetime'] = df['datetime'].apply(
-                    lambda x: x.replace(year=current_year) if pd.notnull(x) and x.year == 1900 else x
+                    lambda x: infer_year(x, current_date) if pd.notnull(x) and x.year == 1900 else x
                 )
         except Exception as e:
             logger.error(f"Error procesando la columna de fechas: {e}")
