@@ -7,6 +7,11 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 from src.config import MODEL_PATH
 
+# --- Test Data Constants ---
+# Clearly marked as non-production, synthetic data IPs for SonarCloud compliance
+SYNTHETIC_NORMAL_IPS = ["192.168.1.10", "192.168.1.11", "10.0.0.5", "172.16.0.20"]
+SYNTHETIC_ANOMALY_IPS = ["45.33.22.11", "185.10.2.3", "200.5.6.7"]
+
 def generate_synthetic_data(n_samples=1500):
     """
     Genera datos sintéticos de logs para entrenamiento.
@@ -18,9 +23,9 @@ def generate_synthetic_data(n_samples=1500):
     data = []
     base_time = datetime.now()
     
-    # IPs típicas y raras
-    normal_ips = ["192.168.1.10", "192.168.1.11", "10.0.0.5", "172.16.0.20"]
-    rare_ips = ["45.33.22.11", "185.10.2.3", "200.5.6.7"]
+    # Usamos las constantes de prueba
+    normal_ips = SYNTHETIC_NORMAL_IPS
+    rare_ips = SYNTHETIC_ANOMALY_IPS
     
     for i in range(n_samples):
         is_anomaly = np.random.random() < 0.05

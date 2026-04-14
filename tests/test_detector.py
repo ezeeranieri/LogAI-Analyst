@@ -3,6 +3,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 from src.detector import LogDetector, BruteForceRule, UserProbingRule
 
+# IP de prueba claramente marcada para evitar hotspots de SonarCloud
+TEST_IP_BRUTE_FORCE = "1.2.3.4"
+TEST_IP_USER_PROBING = "192.168.1.50"
+
 def test_brute_force_detection():
     """
     Simula 6 intentos fallidos en menos de un minuto para validar
@@ -17,7 +21,7 @@ def test_brute_force_detection():
         data.append({
             'timestamp': (base_time + timedelta(seconds=i*5)).strftime('%b %d %H:%M:%S'),
             'datetime': base_time + timedelta(seconds=i*5),
-            'ip_origen': '1.2.3.4',
+            'ip_origen': TEST_IP_BRUTE_FORCE,
             'usuario': 'root',
             'accion': 'Failed password for root',
             'status': 'FAIL'
@@ -37,7 +41,7 @@ def test_brute_force_detection():
     assert not anomalies.empty
     assert len(anomalies) >= 1
     assert "Fuerza Bruta" in anomalies.iloc[0]['razon']
-    assert anomalies.iloc[0]['ip_origen'] == '1.2.3.4'
+    assert anomalies.iloc[0]['ip_origen'] == TEST_IP_BRUTE_FORCE
 
 
 def test_user_probing_detection():
@@ -54,7 +58,7 @@ def test_user_probing_detection():
         data.append({
             'timestamp': (base_time + timedelta(minutes=i*2)).strftime('%b %d %H:%M:%S'),
             'datetime': base_time + timedelta(minutes=i*2),
-            'ip_origen': '192.168.1.50',
+            'ip_origen': TEST_IP_USER_PROBING,
             'usuario': user,
             'accion': f'Failed login for {user}',
             'status': 'FAIL'
@@ -68,6 +72,6 @@ def test_user_probing_detection():
     
     assert not anomalies.empty
     assert "Sondeo de Usuarios" in anomalies.iloc[0]['razon']
-    assert anomalies.iloc[0]['ip_origen'] == '192.168.1.50'
+    assert anomalies.iloc[0]['ip_origen'] == TEST_IP_USER_PROBING
     # La regla detecta a partir del 4to usuario distinto
     assert len(anomalies) >= 1
