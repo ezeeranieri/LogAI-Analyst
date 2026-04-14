@@ -190,22 +190,12 @@ class IADetectorRule(DetectionRule):
         features['status_val'] = df_ml['status'].map(status_map).fillna(0.5)
 
         try:
-            model = None
-            # Intento de cargar modelo persistente
-            if os.path.exists(self.model_path):
-                try:
-                    model = joblib.load(self.model_path)
-                    logger.info(f"Modelo IA cargado desde {self.model_path}")
-                except Exception as e:
-                    logger.warning(f"No se pudo cargar el modelo persistente: {e}. Re-entrenando...")
+            if not os.path.exists(self.model_path):
+                logger.warning(f"Modelo IA no encontrado en {self.model_path}. Por favor, ejecute train_model.py primero.")
+                return pd.DataFrame()
 
-            if model is None:
-                model = IsolationForest(contamination=self.contamination, random_state=42)
-                model.fit(features)
-                # Guardar modelo para futuro uso
-                os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
-                joblib.dump(model, self.model_path)
-                logger.info(f"Nuevo modelo IA entrenado y guardado en {self.model_path}")
+            model = joblib.load(self.model_path)
+            logger.info(f"Modelo IA cargado exitosamente desde {self.model_path}")
             
             predictions = model.predict(features)
             anomaly_mask = predictions == -1

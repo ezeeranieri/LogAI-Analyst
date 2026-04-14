@@ -31,6 +31,13 @@ APP_HOST=127.0.0.1
 APP_PORT=8000
 ```
 
+### Initial Model Training (NEW)
+Before running the API for the first time, you must train the AI anomaly detection model:
+```bash
+python train_model.py
+```
+This will generate synthetic data and save a pre-trained `IsolationForest` model to `data/model.pkl`.
+
 ### Running with Docker (Recommended)
 ```bash
 docker build -t logai-analyst .

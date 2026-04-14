@@ -66,3 +66,5 @@ venv.bak/
 # Sensitive data / raw logs (exclude data contents but keep directory)
 data/*
 !data/.gitkeep
+data/model.pkl
+*.pkl
