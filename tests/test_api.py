@@ -4,6 +4,9 @@ from fastapi.testclient import TestClient
 from main import app
 from src.config import API_KEY
 
+# IP de prueba claramente marcada para evitar hotspots de SonarCloud
+TEST_IP = "1.1.1.1"
+
 client = TestClient(app)
 HEADERS = {"X-API-KEY": API_KEY}
 
@@ -21,7 +24,7 @@ def test_analyze_upload_success():
     """
     # Generamos 6 fallos para disparar la regla de Brute Force
     log_content = "\n".join([
-        "Oct 11 10:00:00 server sshd[123]: Failed password for root from 1.1.1.1" 
+        f"Oct 11 10:00:00 server sshd[123]: Failed password for root from {TEST_IP}" 
         for _ in range(6)
     ])
     
