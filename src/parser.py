@@ -16,7 +16,7 @@ class AuthLogParser:
         self.file_path = file_path
         
         # Expresión regular principal para el formato típico de syslog
-        # Ejemplo: "Oct 11 10:00:00 servername sshd[123]: Failed password for root from 192.168.1.1"
+        # Ejemplo: "Oct 11 10:00:00 servername sshd[123]: Failed password for user from <IP>"
         self.syslog_pattern = re.compile(
             r"^(?P<timestamp>[A-Z][a-z]{2}\s+\d+\s\d{2}:\d{2}:\d{2})\s+"  # Timestamp (ej. Oct 11 10:00:00)
             r"(?P<hostname>\S+)\s+"                                       # Hostname

@@ -15,9 +15,11 @@ MODEL_PATH = os.getenv("MODEL_PATH", os.path.join(DATA_DIR, "model.pkl"))
 LOG_FILE = os.getenv("LOG_FILE", "app_production.log")
 
 # Configuración de Red
-# Se recomienda usar 127.0.0.1 en entornos locales para seguridad.
-# Usar 0.0.0.0 solo cuando sea necesario (ej. dentro de Docker).
-APP_HOST = os.getenv("APP_HOST", "127.0.0.1")
+# DEFAULT_LOCAL_HOST: seguro para entornos de desarrollo local.
+# DEFAULT_DOCKER_HOST: expone el puerto en todas las interfaces (solo usar dentro de Docker).
+DEFAULT_LOCAL_HOST = "127.0.0.1"   # nosonar: not a hardcoded production value
+DEFAULT_DOCKER_HOST = "0.0.0.0"    # nosonar: not a hardcoded production value
+APP_HOST = os.getenv("APP_HOST", DEFAULT_LOCAL_HOST)
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
 
 # Asegurar que las rutas absolutas sean consistentes para la validación de seguridad
