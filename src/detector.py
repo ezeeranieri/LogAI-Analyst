@@ -306,8 +306,8 @@ class LogDetector:
         for rule in self.rules:
             logger.info(f"Evaluando matriz contra regla: {rule.rule_name}")
             anomalous_df = rule.evaluate(df_analysis)
-            
-            if not anomalous_df.empty:
+
+            if anomalous_df is not None and not anomalous_df.empty:
                 all_anomalies.append(anomalous_df)
                 
         if all_anomalies:
