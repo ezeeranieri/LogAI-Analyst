@@ -103,9 +103,9 @@ def test_extract_features_status_mapping():
 
     features = extract_features(df)
 
-    assert features['status_val'].iloc[0] == 1.0
-    assert features['status_val'].iloc[1] == 0.0
-    assert features['status_val'].iloc[2] == 0.5
+    assert features['status_val'].iloc[0] == pytest.approx(1.0)
+    assert features['status_val'].iloc[1] == pytest.approx(0.0)
+    assert features['status_val'].iloc[2] == pytest.approx(0.5)
 
 
 def test_extract_features_unknown_status_defaults():
@@ -121,7 +121,7 @@ def test_extract_features_unknown_status_defaults():
 
     features = extract_features(df)
 
-    assert features['status_val'].iloc[0] == 0.5
+    assert features['status_val'].iloc[0] == pytest.approx(0.5)
 
 
 def test_extract_features_preserves_index():

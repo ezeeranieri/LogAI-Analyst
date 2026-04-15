@@ -123,6 +123,9 @@ async def parse_stats(
     Requiere header X-API-KEY.
     """
     # 1. Validación de extensión
+    if file is None or not hasattr(file, 'filename') or file.filename is None:
+        raise HTTPException(status_code=400, detail="Archivo no válido o no proporcionado.")
+
     filename = file.filename
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".log", ".txt", ""]:
@@ -177,6 +180,9 @@ async def analyze_logs(
     # para evitar bypass cuando el cliente no envía Content-Length header.
 
     # 1. Validación de extensión
+    if file is None or not hasattr(file, 'filename') or file.filename is None:
+        raise HTTPException(status_code=400, detail="Archivo no válido o no proporcionado.")
+
     filename = file.filename
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".log", ".txt", ""]:
