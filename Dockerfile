@@ -24,9 +24,9 @@ RUN adduser --disabled-password --gecos "" appuser
 COPY --from=builder /install /usr/local
 
 # Copiar el código de la aplicación
+# NOTA: Nunca copiar .env a la imagen. Usar --env-file en docker run o secretos.
 COPY src/ ./src/
 COPY main.py .
-COPY .env .
 
 # Preparar directorio de datos y logs con permisos correctos
 RUN mkdir -p /app/data && chown -R appuser:appuser /app

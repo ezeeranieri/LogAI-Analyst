@@ -1,11 +1,11 @@
 import os
-import zlib
 import joblib
 import logging
 import pandas as pd
 from typing import List, Optional
 from abc import ABC, abstractmethod
 from .config import MODEL_PATH
+from .features import extract_features
 
 # Logger local
 logger = logging.getLogger(__name__)
@@ -32,48 +32,74 @@ class DetectionRule(ABC):
 
 
 class BruteForceRule(DetectionRule):
+    """
+    Regla para detectar ataques de Fuerza Bruta.
+    > 5 intentos fallidos en menos de 1 minuto desde la misma IP.
+    """
     @property
     def rule_name(self):
         return "Fuerza Bruta"
-        
+
     def evaluate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Detecta más de 5 intentos fallidos desde una misma IP en 1 minuto.
-        Asume que los intentos ya están estructurados en el DataFrame.
+        Identifica patrones de fuerza bruta usando una ventana móvil de 1 minuto.
+        Solo marca la fila específica donde se alcanza el umbral (el 6to intento),
+        no todas las filas de la ventana.
         """
         try:
-            if df.empty or 'datetime' not in df.columns or 'ip_origen' not in df.columns:
+            if df.empty or 'datetime' not in df.columns:
                 return pd.DataFrame()
-                
-            # Usamos la columna 'status' normalizada por el parser
+
+            # Filtrar solo los intentos fallidos de conexión
             df_failed = df[df['status'] == 'FAIL'].copy()
-            
+
             if df_failed.empty:
                 return pd.DataFrame()
 
             anomalies = []
-            # Agrupar por IP para analizar ventanas de tiempo
+
+            # Agrupar por IP para detectar ataques coordinados desde una misma fuente
             for ip, group in df_failed.groupby('ip_origen'):
-                # Asegurar orden cronológico para rolling index
-                group = group.set_index('datetime').sort_index()
-                
-                # Contar la suma de fallos en ventanas móviles de 1 minuto
-                # rolling() requiere un índice de tipo datetime.
-                counts = group['accion'].rolling('1min').count()
-                
-                # Filtrar lugares donde el contador es mayor estricto a 5 (es decir, > 5)
-                mask_over = counts > 5
-                if mask_over.any():
-                    # Obtenemos las filas específicas donde se detecta la sobrecarga de fuerza bruta
-                    anomalous_rows = group[mask_over].copy()
-                    anomalous_rows['razon'] = f"{self.rule_name} (>5 fallos por min)"
-                    anomalies.append(anomalous_rows.reset_index())
-                    
+                if len(group) < 6:
+                    continue
+
+                # Asegurar orden cronológico
+                group_sorted = group.sort_values('datetime').reset_index(drop=True)
+                datetimes = group_sorted['datetime']
+
+                n = len(group_sorted)
+
+                # Sliding window: contar intentos en ventana de 1 minuto
+                # Usamos two-pointer approach O(n) para eficiencia
+                left = 0
+                threshold_crossed_indices = []
+
+                threshold_already_crossed = False
+                for right in range(n):
+                    # Mover left pointer para mantener ventana de 1 minuto
+                    while left <= right and datetimes.iloc[right] - datetimes.iloc[left] > pd.Timedelta('1min'):
+                        left += 1
+
+                    # Contar intentos en la ventana actual
+                    attempts_in_window = right - left + 1
+
+                    # Si alcanzamos o superamos el umbral (6+ intentos), marcar esta fila
+                    # Solo marcamos la primera vez que se cruza el umbral
+                    if attempts_in_window >= 6 and not threshold_already_crossed:
+                        threshold_crossed_indices.append(right)
+                        threshold_already_crossed = True
+
+                if threshold_crossed_indices:
+                    # Solo marcar las filas donde se cruza el umbral
+                    anomalous_rows = group_sorted.iloc[threshold_crossed_indices].copy()
+                    anomalous_rows['razon'] = f"{self.rule_name} (6+ fallos en 1 min)"
+                    anomalies.append(anomalous_rows)
+
             if anomalies:
                 return pd.concat(anomalies, ignore_index=True)
         except Exception as e:
             logger.error(f"Error en regla {self.rule_name}: {e}")
-            
+
         return pd.DataFrame()
 
 
@@ -167,10 +193,19 @@ class UserProbingRule(DetectionRule):
 
                 window_unique = pd.Series(window_unique_counts, index=group_sorted.index)
 
-                mask_probe = window_unique > 3
-                if mask_probe.any():
-                    anomalous_rows = group_sorted[mask_probe].copy()
-                    anomalous_rows['razon'] = f"{self.rule_name}: Múltiples cuentas desde una misma IP"
+                # Encontrar los índices donde se cruza el umbral (4+ usuarios únicos)
+                # Solo marcamos la primera fila donde unique_count alcanza 4, no todas
+                threshold_indices = []
+                threshold_already_crossed = False
+                for i, unique_count in enumerate(window_unique_counts):
+                    if unique_count >= 4 and not threshold_already_crossed:
+                        threshold_indices.append(i)
+                        threshold_already_crossed = True
+
+                if threshold_indices:
+                    # Solo marcar las filas representativas donde se cruza el umbral
+                    anomalous_rows = group_sorted.iloc[threshold_indices].copy()
+                    anomalous_rows['razon'] = f"{self.rule_name}: 4+ usuarios distintos desde IP"
                     anomalies.append(anomalous_rows)
 
             if anomalies:
@@ -206,17 +241,8 @@ class IADetectorRule(DetectionRule):
             return pd.DataFrame()
 
         df_ml = df.copy()
-        features = pd.DataFrame(index=df_ml.index)
-        features['hour'] = df_ml['datetime'].dt.hour
-        
-        # Hashing determinístico para IPs (evita dependencia del orden de entrada de LabelEncoder)
-        features['ip_encoded'] = df_ml['ip_origen'].apply(
-            lambda x: zlib.adler32(str(x).encode()) & 0xffffffff
-        )
-        
-        # Mapeo numérico del status para el modelo
-        status_map = {'SUCCESS': 1, 'FAIL': 0, 'INFO': 0.5}
-        features['status_val'] = df_ml['status'].map(status_map).fillna(0.5)
+        # Use shared feature extraction to ensure consistency with training
+        features = extract_features(df_ml)
 
         try:
             model = self.model
@@ -224,6 +250,13 @@ class IADetectorRule(DetectionRule):
                 if not os.path.exists(self.model_path):
                     logger.warning(f"Modelo IA no encontrado en {self.model_path}. Por favor, ejecute train_model.py primero.")
                     return pd.DataFrame()
+                # FALLBACK: Cargando desde disco - esto bloquea el request thread!
+                # En producción, esto solo debería ocurrir si el lifespan falló
+                logger.warning("=" * 70)
+                logger.warning("WARNING: Modelo IA cargando desde disco (fallback mode)")
+                logger.warning("Esto puede causar latencia en la primera request.")
+                logger.warning("Verificar que el lifespan en main.py cargó el modelo correctamente.")
+                logger.warning("=" * 70)
                 model = joblib.load(self.model_path)
                 logger.info(f"Modelo IA cargado desde archivo {self.model_path}")
             else:

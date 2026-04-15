@@ -8,12 +8,11 @@ slowapi>=0.1.9
 
 # Análisis de Datos
 pandas~=2.1.0
-numpy>=1.26.0
+numpy~=1.26.0
 
 # Machine Learning y Persistencia
 scikit-learn~=1.3.0
 joblib>=1.3.0
-scipy>=1.10.0
 
 # Entorno
 python-dotenv>=1.0.0

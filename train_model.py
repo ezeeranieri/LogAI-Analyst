@@ -1,11 +1,11 @@
 import os
-import zlib
 import joblib
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 from src.config import MODEL_PATH
+from src.features import extract_features
 
 # --- Training Data Constants ---
 # IPs sintéticas — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
@@ -52,23 +52,8 @@ def generate_synthetic_data(n_samples=1500):
         
     return pd.DataFrame(data)
 
-def extract_features(df):
-    """
-    Extrae las mismas características que usa el detector en tiempo real.
-    """
-    features = pd.DataFrame(index=df.index)
-    features['hour'] = df['datetime'].dt.hour
-    
-    # Hashing de IPs coincidente con detector.py
-    features['ip_encoded'] = df['ip_origen'].apply(
-        lambda x: zlib.adler32(str(x).encode()) & 0xffffffff
-    )
-    
-    # Mapeo de status coincidente con detector.py
-    status_map = {'SUCCESS': 1, 'FAIL': 0, 'INFO': 0.5}
-    features['status_val'] = df['status'].map(status_map).fillna(0.5)
-    
-    return features
+# Note: extract_features is now imported from src.features to ensure
+# training and inference use identical feature engineering
 
 def train():
     # 1. Preparar datos

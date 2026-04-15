@@ -7,8 +7,8 @@ from pydantic import Field, field_validator, ConfigDict
 class Settings(BaseSettings):
     """Application settings with validation via Pydantic."""
 
-    # Configuración de Seguridad
-    API_KEY: str = Field(default="dev-secret-key-12345", description="Secret key for API authentication")
+    # Configuración de Seguridad - REQUERIDA, sin default por seguridad
+    API_KEY: str = Field(..., description="Secret key for API authentication. MUST be set in environment.")
 
     # Configuración de Directorios
     DATA_DIR: str = Field(default="data", description="Directory for data storage")
@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     LOG_FILE: str = Field(default="app_production.log", description="Log file path")
     MODEL_PATH: str | None = Field(default=None, description="Path to ML model file")
     REDIS_URL: str | None = Field(default=None, description="Redis URL for rate limiting (optional)")
+    WORKERS: int = Field(default=1, ge=1, description="Number of worker processes (affects rate limiting)")
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -67,5 +68,6 @@ DATA_DIR = _settings.DATA_DIR
 LOG_FILE = _settings.LOG_FILE
 MODEL_PATH = _settings.MODEL_PATH
 REDIS_URL = _settings.REDIS_URL
+WORKERS = _settings.WORKERS
 BASE_DIR = _settings.BASE_DIR
 ABS_DATA_DIR = _settings.ABS_DATA_DIR

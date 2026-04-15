@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from src.parser import AuthLogParser
 from src.detector import LogDetector, BruteForceRule, TimeAnomalyRule, IADetectorRule, UserProbingRule
-from src.config import ABS_DATA_DIR, LOG_FILE, API_KEY, APP_HOST, APP_PORT, MODEL_PATH, REDIS_URL
+from src.config import ABS_DATA_DIR, LOG_FILE, API_KEY, APP_HOST, APP_PORT, MODEL_PATH, REDIS_URL, WORKERS
 from src.utils import FileManager
 
 # Constantes de Producción
@@ -59,7 +59,19 @@ if REDIS_URL:
     logger.info(f"Rate limiting configured with Redis backend: {REDIS_URL}")
 else:
     limiter = Limiter(key_func=get_remote_address)
-    logger.warning("Rate limiting using in-memory storage (not suitable for multi-worker production)")
+    if WORKERS > 1:
+        # CRITICAL: Multi-worker without Redis means rate limiting is per-process
+        # Actual limit becomes 10/min * WORKERS, which defeats the purpose
+        logger.error("=" * 80)
+        logger.error("CRITICAL SECURITY WARNING: Running multi-worker without Redis!")
+        logger.error(f"WORKERS={WORKERS} but REDIS_URL not set.")
+        logger.error("Rate limiting is PER-PROCESS. Effective limit: 10/min * workers")
+        logger.error("This means a single IP can make up to 10*{WORKERS} requests per minute!")
+        logger.error("Set REDIS_URL for distributed rate limiting or set WORKERS=1")
+        logger.error("=" * 80)
+        raise RuntimeError("Multi-worker setup requires REDIS_URL for distributed rate limiting")
+    else:
+        logger.warning("Rate limiting using in-memory storage (single-worker mode)")
 
 app = FastAPI(
     title="LogAI-Analyst",
@@ -98,6 +110,58 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.post("/stats")
+@limiter.limit("10/minute")
+async def parse_stats(
+    request: Request,
+    file: UploadFile = File(...),
+    authenticated: str = Depends(get_api_key)
+):
+    """
+    Endpoint para obtener estadísticas de parsing de un archivo de logs.
+    Útil para verificar qué tan bien el parser maneja un formato particular.
+    Requiere header X-API-KEY.
+    """
+    # 1. Validación de extensión
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in [".log", ".txt", ""]:
+        raise HTTPException(status_code=400, detail="Extensión no válida.")
+
+    temp_file_path = None
+    try:
+        # 2. Guardar archivo
+        temp_file_path = await FileManager.save_upload(file, ABS_DATA_DIR, max_size=MAX_FILE_SIZE)
+
+        # 3. Parsear y obtener estadísticas
+        parser = AuthLogParser(temp_file_path)
+        df_logs = parser.parse()
+        stats = parser.get_stats()
+
+        return {
+            "status": "success",
+            "filename": filename,
+            "parsing_stats": {
+                "lines_read": stats['lines_read'],
+                "lines_parsed": stats['lines_parsed'],
+                "lines_discarded": stats['lines_discarded'],
+                "parse_rate_percent": round(stats['parse_rate'], 2)
+            },
+            "extracted_fields": list(df_logs.columns) if not df_logs.empty else [],
+            "sample_records": min(len(df_logs), 5)
+        }
+
+    except Exception as e:
+        logger.error(f"Error en endpoint /stats: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor. Por favor, contacte al administrador."
+        )
+
+    finally:
+        if temp_file_path:
+            FileManager.cleanup(temp_file_path)
+
 @app.post("/analyze", response_model=AnalysisResponse)
 @limiter.limit("10/minute")
 async def analyze_logs(
@@ -109,12 +173,10 @@ async def analyze_logs(
     Endpoint para subir y analizar un archivo de logs.
     Requiere header X-API-KEY.
     """
-    # 1. Validación de tamaño
-    if file.size and file.size > MAX_FILE_SIZE:
-        logger.warning(f"Carga rechazada: Archivo demasiado grande.")
-        raise HTTPException(status_code=413, detail="El archivo excede el límite de 10MB.")
+    # NOTA: La validación de tamaño se realiza DURANTE la lectura en FileManager.save_upload()
+    # para evitar bypass cuando el cliente no envía Content-Length header.
 
-    # 2. Validación de extensión
+    # 1. Validación de extensión
     filename = file.filename
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".log", ".txt", ""]:
@@ -122,8 +184,9 @@ async def analyze_logs(
 
     temp_file_path = None
     try:
-        # 3. Gestión de archivos delegada a FileManager
-        temp_file_path = await FileManager.save_upload(file, ABS_DATA_DIR)
+        # 2. Gestión de archivos delegada a FileManager
+        # La validación de tamaño (10MB) ocurre durante el streaming, no confía en Content-Length
+        temp_file_path = await FileManager.save_upload(file, ABS_DATA_DIR, max_size=MAX_FILE_SIZE)
 
         # 4. Procesar con el Parser
         parser = AuthLogParser(temp_file_path)
@@ -157,10 +220,11 @@ async def analyze_logs(
         )
 
     except Exception as e:
-        logger.error(f"Error crítico en endpoint /analyze: {str(e)}", exc_info=True)
+        logger.error(f"Error crítico en endpoint /analyze: {type(e).__name__}: {str(e)}", exc_info=True)
+        # Mensaje genérico para no exponer detalles internos en producción
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error interno del servidor: {type(e).__name__}"
+            status_code=500,
+            detail="Error interno del servidor. Por favor, contacte al administrador."
         )
     
     finally:
