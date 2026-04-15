@@ -9,27 +9,53 @@ TEST_IP_BRUTE_FORCE = "192.0.2.1"
 TEST_IP_USER_PROBING = "192.0.2.2"
 TEST_IP_TIME_ANOMALY = "192.0.2.3"
 
+
+def _create_log_entries(base_time: datetime, count: int, ip: str, user: str,
+                        action: str, status: str, interval_seconds: int = 5) -> pd.DataFrame:
+    """Helper function to create log entries for testing."""
+    data = []
+    for i in range(count):
+        data.append({
+            'timestamp': (base_time + timedelta(seconds=i*interval_seconds)).strftime('%b %d %H:%M:%S'),
+            'datetime': base_time + timedelta(seconds=i*interval_seconds),
+            'ip_origen': ip,
+            'usuario': user,
+            'accion': action,
+            'status': status
+        })
+    return pd.DataFrame(data)
+
+
+def _create_log_entries_with_interval(base_time: datetime, count: int, ip: str, users: list,
+                                       action_template: str, status: str, interval_minutes: int = 2) -> pd.DataFrame:
+    """Helper function to create log entries with varying users and minute intervals."""
+    data = []
+    for i, user in enumerate(users):
+        data.append({
+            'timestamp': (base_time + timedelta(minutes=i*interval_minutes)).strftime('%b %d %H:%M:%S'),
+            'datetime': base_time + timedelta(minutes=i*interval_minutes),
+            'ip_origen': ip,
+            'usuario': user,
+            'accion': action_template.format(user=user),
+            'status': status
+        })
+    return pd.DataFrame(data)
+
 def test_brute_force_detection():
     """
     Simula 6 intentos fallidos en menos de un minuto para validar
     que la regla de BruteForceRule los detecta correctamente.
     """
-    # 1. Crear datos sintéticos
     base_time = datetime(2026, 10, 11, 10, 0, 0)
-    data = []
-    
-    # Generamos 6 fallos en intervalos de 5 segundos (total 25 segundos < 1 min)
-    for i in range(6):
-        data.append({
-            'timestamp': (base_time + timedelta(seconds=i*5)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(seconds=i*5),
-            'ip_origen': TEST_IP_BRUTE_FORCE,
-            'usuario': 'root',
-            'accion': 'Failed password for root',
-            'status': 'FAIL'
-        })
-        
-    df = pd.DataFrame(data)
+    df = _create_log_entries(
+        base_time=base_time,
+        count=6,
+        ip=TEST_IP_BRUTE_FORCE,
+        user='root',
+        action='Failed password for root',
+        status='FAIL',
+        interval_seconds=5
+    )
     
     # 2. Configurar detector
     detector = LogDetector()
@@ -53,21 +79,16 @@ def test_user_probing_detection():
     que UserProbingRule detecta el sondeo de cuentas.
     """
     base_time = datetime(2026, 10, 11, 10, 0, 0)
-    data = []
-    
-    # 4 usuarios distintos en intervalos de 2 minutos (total 6 minutos < 10 min)
     users = ["admin", "root", "dev", "guest"]
-    for i, user in enumerate(users):
-        data.append({
-            'timestamp': (base_time + timedelta(minutes=i*2)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(minutes=i*2),
-            'ip_origen': TEST_IP_USER_PROBING,
-            'usuario': user,
-            'accion': f'Failed login for {user}',
-            'status': 'FAIL'
-        })
-        
-    df = pd.DataFrame(data)
+    df = _create_log_entries_with_interval(
+        base_time=base_time,
+        count=4,
+        ip=TEST_IP_USER_PROBING,
+        users=users,
+        action_template='Failed login for {user}',
+        status='FAIL',
+        interval_minutes=2
+    )
     detector = LogDetector()
     detector.add_rule(UserProbingRule())
     
@@ -86,21 +107,16 @@ def test_time_anomaly_detection():
     Simula accesos exitosos fuera del horario laboral (3 AM) para validar
     que TimeAnomalyRule detecta correctamente.
     """
-    base_time = datetime(2026, 10, 11, 3, 0, 0)  # 3 AM - fuera de horario
-    data = []
-
-    # 3 accesos exitosos a las 3 AM (fuera de 8-18)
-    for i in range(3):
-        data.append({
-            'timestamp': (base_time + timedelta(minutes=i*10)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(minutes=i*10),
-            'ip_origen': TEST_IP_TIME_ANOMALY,
-            'usuario': 'admin',
-            'accion': 'session opened for user admin',
-            'status': 'SUCCESS'
-        })
-
-    df = pd.DataFrame(data)
+    base_time = datetime(2026, 10, 11, 3, 0, 0)
+    df = _create_log_entries(
+        base_time=base_time,
+        count=3,
+        ip=TEST_IP_TIME_ANOMALY,
+        user='admin',
+        action='session opened for user admin',
+        status='SUCCESS',
+        interval_seconds=600  # 10 minutes
+    )
     rule = TimeAnomalyRule(start_hour=8, end_hour=18)
 
     anomalies = rule.evaluate(df)
@@ -115,21 +131,16 @@ def test_time_anomaly_no_detection_during_work_hours():
     """
     Verifica que NO se detectan anomalías durante horario laboral.
     """
-    base_time = datetime(2026, 10, 11, 10, 0, 0)  # 10 AM - dentro de horario
-    data = []
-
-    # Accesos exitosos durante horario laboral
-    for i in range(3):
-        data.append({
-            'timestamp': (base_time + timedelta(minutes=i*10)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(minutes=i*10),
-            'ip_origen': TEST_IP_TIME_ANOMALY,
-            'usuario': 'admin',
-            'accion': 'session opened for user admin',
-            'status': 'SUCCESS'
-        })
-
-    df = pd.DataFrame(data)
+    base_time = datetime(2026, 10, 11, 10, 0, 0)
+    df = _create_log_entries(
+        base_time=base_time,
+        count=3,
+        ip=TEST_IP_TIME_ANOMALY,
+        user='admin',
+        action='session opened for user admin',
+        status='SUCCESS',
+        interval_seconds=600  # 10 minutes
+    )
     rule = TimeAnomalyRule(start_hour=8, end_hour=18)
 
     anomalies = rule.evaluate(df)
@@ -144,22 +155,16 @@ def test_ia_detector_with_synthetic_anomalies():
     Prueba IADetectorRule con datos que deberían ser anómalos
     (horarios raros + IPs inusuales + muchos fallos).
     """
-    # Generar datos anómalos
-    base_time = datetime(2026, 10, 11, 2, 0, 0)  # 2 AM
-    data = []
-
-    # 15 registros anómalos: hora rara, IP rara, status FAIL
-    for i in range(15):
-        data.append({
-            'timestamp': (base_time + timedelta(minutes=i)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(minutes=i),
-            'ip_origen': "192.0.2.200",  # IP rara
-            'usuario': 'root',
-            'accion': 'Failed password',
-            'status': 'FAIL'
-        })
-
-    df = pd.DataFrame(data)
+    base_time = datetime(2026, 10, 11, 2, 0, 0)
+    df = _create_log_entries(
+        base_time=base_time,
+        count=15,
+        ip="192.0.2.200",
+        user='root',
+        action='Failed password',
+        status='FAIL',
+        interval_seconds=60  # 1 minute
+    )
     rule = IADetectorRule()
 
     # El modelo debería detectar algunas anomalías
@@ -188,20 +193,15 @@ def test_ia_detector_insufficient_data():
     Verifica que IADetectorRule requiere suficientes datos (>5 registros).
     """
     base_time = datetime(2026, 10, 11, 10, 0, 0)
-    data = []
-
-    # Solo 3 registros (menos del umbral de 5)
-    for i in range(3):
-        data.append({
-            'timestamp': (base_time + timedelta(minutes=i)).strftime('%b %d %H:%M:%S'),
-            'datetime': base_time + timedelta(minutes=i),
-            'ip_origen': "192.0.2.1",
-            'usuario': 'root',
-            'accion': 'Failed password',
-            'status': 'FAIL'
-        })
-
-    df = pd.DataFrame(data)
+    df = _create_log_entries(
+        base_time=base_time,
+        count=3,
+        ip="192.0.2.1",
+        user='root',
+        action='Failed password',
+        status='FAIL',
+        interval_seconds=60  # 1 minute
+    )
     rule = IADetectorRule()
 
     anomalies = rule.evaluate(df)
