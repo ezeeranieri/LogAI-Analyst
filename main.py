@@ -83,7 +83,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 # --- Dependencias de Seguridad ---
-async def get_api_key(api_key: str = Security(api_key_header)):
+def get_api_key(api_key: str = Security(api_key_header)):
     if api_key and secrets.compare_digest(api_key, API_KEY):
         return api_key
     raise HTTPException(
