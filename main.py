@@ -96,6 +96,21 @@ class AnalysisResponse(BaseModel):
     total_threats: int
     data: List[Dict[str, Any]]
 
+def _validate_upload_file(file: UploadFile) -> str:
+    """
+    Helper function to validate uploaded file.
+    Returns the filename if valid, raises HTTPException otherwise.
+    """
+    if file is None or not hasattr(file, 'filename') or file.filename is None:
+        raise HTTPException(status_code=400, detail="Archivo no válido o no proporcionado.")
+
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in [".log", ".txt", ""]:
+        raise HTTPException(status_code=400, detail="Extensión no válida.")
+
+    return filename
+
 @app.get("/")
 async def root():
     return {"message": "LogAI-Analyst API operativa (Requiere Autenticación)."}
@@ -122,14 +137,8 @@ async def parse_stats(
     Útil para verificar qué tan bien el parser maneja un formato particular.
     Requiere header X-API-KEY.
     """
-    # 1. Validación de extensión
-    if file is None or not hasattr(file, 'filename') or file.filename is None:
-        raise HTTPException(status_code=400, detail="Archivo no válido o no proporcionado.")
-
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in [".log", ".txt", ""]:
-        raise HTTPException(status_code=400, detail="Extensión no válida.")
+    # 1. Validación de archivo
+    filename = _validate_upload_file(file)
 
     temp_file_path = None
     try:
@@ -179,14 +188,8 @@ async def analyze_logs(
     # NOTA: La validación de tamaño se realiza DURANTE la lectura en FileManager.save_upload()
     # para evitar bypass cuando el cliente no envía Content-Length header.
 
-    # 1. Validación de extensión
-    if file is None or not hasattr(file, 'filename') or file.filename is None:
-        raise HTTPException(status_code=400, detail="Archivo no válido o no proporcionado.")
-
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in [".log", ".txt", ""]:
-        raise HTTPException(status_code=400, detail="Extensión no válida.")
+    # 1. Validación de archivo
+    filename = _validate_upload_file(file)
 
     temp_file_path = None
     try:
