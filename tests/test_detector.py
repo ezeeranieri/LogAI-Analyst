@@ -37,9 +37,10 @@ def test_brute_force_detection():
     
     # 3. Ejecutar detección
     anomalies = detector.run(df)
-    
+
     # 4. Validaciones
     # La regla detecta a partir del 6to intento fallido en la ventana
+    assert anomalies is not None
     assert not anomalies.empty
     assert len(anomalies) >= 1
     assert "Fuerza Bruta" in anomalies.iloc[0]['razon']
@@ -71,7 +72,8 @@ def test_user_probing_detection():
     detector.add_rule(UserProbingRule())
     
     anomalies = detector.run(df)
-    
+
+    assert anomalies is not None
     assert not anomalies.empty
     assert "Sondeo de Usuarios" in anomalies.iloc[0]['razon']
     assert anomalies.iloc[0]['ip_origen'] == TEST_IP_USER_PROBING
@@ -103,6 +105,7 @@ def test_time_anomaly_detection():
 
     anomalies = rule.evaluate(df)
 
+    assert anomalies is not None
     assert not anomalies.empty
     assert "Anomalía de Horario" in anomalies.iloc[0]['razon']
     assert anomalies.iloc[0]['ip_origen'] == TEST_IP_TIME_ANOMALY
@@ -132,6 +135,7 @@ def test_time_anomaly_no_detection_during_work_hours():
     anomalies = rule.evaluate(df)
 
     # No debería detectar anomalías durante horario laboral
+    assert anomalies is not None
     assert anomalies.empty
 
 
@@ -175,6 +179,7 @@ def test_ia_detector_empty_data():
 
     anomalies = rule.evaluate(df)
 
+    assert anomalies is not None
     assert anomalies.empty
 
 
@@ -202,4 +207,5 @@ def test_ia_detector_insufficient_data():
     anomalies = rule.evaluate(df)
 
     # Debería devolver vacío por insuficientes datos
+    assert anomalies is not None
     assert anomalies.empty
