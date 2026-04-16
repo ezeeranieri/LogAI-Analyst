@@ -56,6 +56,28 @@ Professional AI-powered security analysis tool built with Python and FastAPI for
 - **Heuristic & Lightweight ML**: Rule-based detection (3 attack types) + ML layer for unknown patterns.
 - **Security Quotas**: 10MB file upload limit to prevent storage exhaustion or DoS.
 
+## Security & Privacy
+
+### Data Processing
+
+- **100% Local Processing**: Log files are processed **on-premises** — no data is sent to external APIs, cloud services, or third-party AI providers
+- **Ephemeral Storage**: Uploaded files are stored temporarily (UUID-named) and **automatically deleted** after analysis via `finally` blocks
+- **No Data Persistence**: The API is **stateless** — log contents are never stored in databases or retained between requests
+- **No Training on Real Data**: The ML model (`Isolation Forest`) is **pre-trained offline** on synthetic data — it never learns from or retains your actual log entries
+
+### Sensitive Information Handling
+
+- **IP addresses**: Hashed using deterministic `zlib.adler32` for feature extraction (reversible mapping not stored)
+- **Usernames**: Processed only for detection rules (brute force, probing) — never logged or retained
+- **Passwords/Keys**: Never parsed — the regex explicitly extracts only syslog envelope data (timestamp, IP, user, action)
+
+### Compliance Notes
+
+This architecture supports GDPR/privacy-conscious deployments:
+- Data never leaves your infrastructure
+- No persistent storage of PII (Personally Identifiable Information)
+- Automatic cleanup prevents data leakage between requests
+
 ## Installation and Deployment
 
 ### Environment Configuration
