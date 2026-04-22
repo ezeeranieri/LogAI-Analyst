@@ -41,6 +41,9 @@ class SyslogParser(BaseParser):
 
     def _extract_user(self, action_msg: str) -> Optional[str]:
         """Extracts username from message using multiple patterns."""
+        if not action_msg:
+            return None
+            
         for name, pattern in self.auth_patterns.items():
             match = pattern.search(action_msg)
             if match:
@@ -48,7 +51,12 @@ class SyslogParser(BaseParser):
                 if user: return user
         
         user_match = self.user_pattern.search(action_msg)
-        return user_match.group('user') if user_match else None
+        if user_match:
+            try:
+                return user_match.group('user')
+            except (IndexError, KeyError):
+                return None
+        return None
 
     def _determine_status(self, action_msg: str, process: str) -> str:
         """Determines status based on message content."""
@@ -79,16 +87,23 @@ class SyslogParser(BaseParser):
         action_msg = data['action']
         
         ip_match = self.ip_pattern.search(action_msg)
+        ip_val = None
+        if ip_match:
+            try:
+                ip_val = ip_match.group('ip')
+            except (IndexError, KeyError):
+                ip_val = None
+                
         user = self._extract_user(action_msg)
         status = self._determine_status(action_msg, data.get('process', ''))
 
         self.lines_parsed += 1
         return {
-            'timestamp': data['timestamp'],
-            'hostname': data['hostname'],
-            'process': data['process'],
+            'timestamp': data.get('timestamp'),
+            'hostname': data.get('hostname'),
+            'process': data.get('process'),
             'pid': data.get('pid'),
-            'ip_origen': ip_match.group('ip') if ip_match else None,
+            'ip_origen': ip_val,
             'usuario': user,
             'accion': action_msg,
             'status': status,

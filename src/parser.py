@@ -59,7 +59,12 @@ class AuthLogParser:
             with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
                 # Detect format from first 20 lines
                 sample = [f.readline() for _ in range(20)]
-                self.active_parser = self._detect_format(sample)
+                detected = self._detect_format(sample)
+                
+                if detected is None:
+                    raise ValueError(f"CRITICAL: Failed to detect log format for {self.file_path}. No suitable parser found.")
+                
+                self.active_parser = detected
                 logger.info(f"Using parser: {self.active_parser.__class__.__name__}")
                 
                 f.seek(0)
@@ -67,6 +72,11 @@ class AuthLogParser:
                     line = line.strip()
                     if not line: continue
                     
+                    if self.active_parser is None:
+                        # This should theoretically be unreachable due to the raise above, 
+                        # but we check to satisfy static analysis tools (SonarQube)
+                        break
+                        
                     p_line = self.active_parser.parse_line(line)
                     if p_line:
                         parsed_data.append(p_line)
@@ -78,7 +88,8 @@ class AuthLogParser:
                     progress_callback(len(parsed_data), total_lines)
 
             # Sync stats from active parser
-            self.lines_read = self.active_parser.lines_read
+            if self.active_parser:
+                self.lines_read = self.active_parser.lines_read
             
         except Exception as e:
             logger.error(f"Parsing error: {e}")

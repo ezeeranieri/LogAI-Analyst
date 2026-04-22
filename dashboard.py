@@ -256,10 +256,15 @@ def main():
     st.title("Security Analysis Terminal")
     st.caption("Real-time anomaly and pattern detection via heuristic modeling and Machine Learning.")
 
-    if st.session_state.processed:
-        total_logs = len(st.session_state.df_logs)
-        total_anomalies = len(st.session_state.df_anomalies)
-        latency_str = f"{st.session_state.latency_ms}ms"
+    # Guard Clause: Ensure session state keys exist and are not None
+    df_logs = st.session_state.get('df_logs')
+    df_anomalies = st.session_state.get('df_anomalies')
+    is_processed = st.session_state.get('processed', False)
+
+    if is_processed and df_logs is not None:
+        total_logs = len(df_logs)
+        total_anomalies = len(df_anomalies) if df_anomalies is not None else 0
+        latency_str = f"{st.session_state.get('latency_ms', 0)}ms"
         
         threat_level = "LOW"
         threat_color = "#2A9D8F"
@@ -299,8 +304,8 @@ def main():
 
     # Event Intensity
     st.subheader("Event Intensity")
-    if st.session_state.processed and not st.session_state.df_logs.empty and 'datetime' in st.session_state.df_logs.columns:
-        df_time = st.session_state.df_logs.copy()
+    if is_processed and df_logs is not None and not df_logs.empty and 'datetime' in df_logs.columns:
+        df_time = df_logs.copy()
         df_time = df_time.dropna(subset=['datetime']).sort_values('datetime')
         if not df_time.empty:
             df_g = df_time.set_index('datetime').resample('1H').size().reset_index(name='Events')
@@ -325,11 +330,11 @@ def main():
     with st.container():
         log_html = "<div class='log-container'>"
         
-        if st.session_state.processed and not st.session_state.df_logs.empty:
+        if is_processed and df_logs is not None and not df_logs.empty:
             # Map of (datetime, ip) -> anomaly info for O(1) lookup during rendering
             anomaly_map = {}
-            if not st.session_state.df_anomalies.empty:
-                for _, r in st.session_state.df_anomalies.iterrows():
+            if df_anomalies is not None and not df_anomalies.empty:
+                for _, r in df_anomalies.iterrows():
                     anomaly_map[(r.get('datetime'), r.get('ip_origen'))] = {
                         'rule': r.get('rule', 'Unknown'),
                         'severity': str(r.get('severity', 'low')).lower(),
@@ -337,7 +342,7 @@ def main():
                     }
             
             # Mostramos un chunk rápido de logs para no saturar memoria RAM DOM
-            for i, row in st.session_state.df_logs.tail(200).iterrows():
+            for i, row in df_logs.tail(200).iterrows():
                 dt = row.get('datetime')
                 ip = row.get('ip_origen')
                 

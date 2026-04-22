@@ -69,6 +69,8 @@ class LogAnalysisPipeline:
         if self.model:
             detector.add_rule(IsolationForestRule(model=self.model))
             logger.debug("IsolationForestRule injected via pipeline constructor.")
+        else:
+            logger.warning("LogAnalysisPipeline: No ML model provided. IsolationForestRule (Advanced Diagnostics) will be omitted.")
             
         return detector
 

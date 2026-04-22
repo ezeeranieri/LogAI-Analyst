@@ -58,6 +58,7 @@ class WebParser(BaseParser):
 
     def parse_line(self, line: str) -> Optional[Dict[str, Any]]:
         self.lines_read += 1
+        if not line: return None
         
         # Try Access Log
         match = self.weblog_pattern.match(line)
@@ -69,7 +70,8 @@ class WebParser(BaseParser):
             try:
                 status_num = int(data.get('status', '200'))
                 status = "FAIL" if status_num >= 400 else "SUCCESS" if status_num >= 200 else "INFO"
-            except ValueError: status = "INFO"
+            except (ValueError, TypeError): 
+                status = "INFO"
 
             self.lines_parsed += 1
             return {
@@ -94,7 +96,8 @@ class WebParser(BaseParser):
         match = self.web_error_pattern.match(line)
         if match:
             data = match.groupdict()
-            client_ip = data.get('ip', '').split(':')[0] if data.get('ip') else None
+            ip_raw = data.get('ip')
+            client_ip = ip_raw.split(':')[0] if ip_raw else None
             
             self.lines_parsed += 1
             return {
