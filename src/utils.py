@@ -1,14 +1,26 @@
-import os
-import uuid
 import json
 import csv
-import aiofiles
+import uuid
 import logging
+from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+import aiofiles
 from fastapi import UploadFile, HTTPException
 
 logger = logging.getLogger("LogAI-Utils")
+
+def sanitize_for_log(data: Any) -> str:
+    """
+    Sanitizes user-provided data for safe logging.
+    Replaces control characters like newlines to prevent Log Injection.
+    """
+    if data is None:
+        return "None"
+    
+    # Convert to string and replace CRLF/LF with a safe placeholder
+    clean_data = str(data).replace("\n", " [NL] ").replace("\r", " [CR] ")
+    return clean_data
 
 class FileManager:
     """
@@ -21,59 +33,57 @@ class FileManager:
         """
         Safely saves an uploaded file using a sanitized name (UUID).
         Validates actual size during reading to prevent Content-Length header bypass.
-
-        Args:
-            file: Uploaded file
-            base_dir: Base directory to save
-            max_size: Maximum allowed size in bytes (optional)
-
-        Returns:
-            Absolute path of saved file
-
-        Raises:
-            HTTPException: If file exceeds max_size
         """
-        # 1. Prepare directory
-        temp_dir = os.path.join(base_dir, "temp_uploads")
-        os.makedirs(temp_dir, exist_ok=True)
+        # 1. Prepare directory with Pathlib
+        base_path = Path(base_dir).resolve()
+        temp_dir = base_path / "temp_uploads"
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
         # 2. Generate sanitized filename
         unique_id = uuid.uuid4().hex
-        extension = os.path.splitext(file.filename)[1].lower()
-        temp_file_path = os.path.join(temp_dir, f"{unique_id}{extension}")
+        original_ext = Path(file.filename or "").suffix.lower()
+        # Only allow specific extensions if provided, but here we just keep original safely
+        temp_file_path = temp_dir / f"{unique_id}{original_ext}"
 
         # 3. Physical async save with streaming (8KB chunks) + size validation
-        # Avoids loading large files entirely into memory
-        logger.debug(f"Saving sanitized file: {unique_id}{extension}")
+        logger.debug(f"Saving sanitized file: {unique_id}{original_ext}")
         total_bytes = 0
-        async with aiofiles.open(temp_file_path, "wb") as buffer:
-            while chunk := await file.read(8192):  # 8KB chunks
-                total_bytes += len(chunk)
-                if max_size and total_bytes > max_size:
-                    # Delete partial file and raise error
-                    await buffer.close()
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"File exceeds limit of {max_size / (1024 * 1024):.1f}MB"
-                    )
-                await buffer.write(chunk)
+        try:
+            async with aiofiles.open(temp_file_path, "wb") as buffer:
+                while chunk := await file.read(8192):  # 8KB chunks
+                    total_bytes += len(chunk)
+                    if max_size and total_bytes > max_size:
+                        await buffer.close()
+                        if temp_file_path.exists():
+                            temp_file_path.unlink()
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"File exceeds limit of {max_size / (1024 * 1024):.1f}MB"
+                        )
+                    await buffer.write(chunk)
+        except Exception as e:
+            if temp_file_path.exists():
+                temp_file_path.unlink()
+            if isinstance(e, HTTPException):
+                raise
+            logger.error(f"Failed to save upload: {sanitize_for_log(e)}")
+            raise HTTPException(status_code=500, detail="Error saving uploaded file")
 
-        logger.debug(f"File saved: {unique_id}{extension} ({total_bytes} bytes)")
-        return temp_file_path
+        logger.debug(f"File saved: {unique_id}{original_ext} ({total_bytes} bytes)")
+        return str(temp_file_path)
 
     @staticmethod
     def cleanup(file_path: str) -> None:
         """
         Safely removes a file from the system.
         """
-        if os.path.exists(file_path):
+        path = Path(file_path)
+        if path.exists() and path.is_file():
             try:
-                os.remove(file_path)
-                logger.debug(f"File cleanup completed: {os.path.basename(file_path)}")
+                path.unlink()
+                logger.debug(f"File cleanup completed: {sanitize_for_log(path.name)}")
             except Exception as e:
-                logger.error(f"Could not delete file {file_path}: {e}")
+                logger.error(f"Could not delete file {sanitize_for_log(file_path)}: {sanitize_for_log(e)}")
 
 
 class ReportExporter:
@@ -85,10 +95,10 @@ class ReportExporter:
     ALLOWED_FORMATS = {"json", "csv"}
 
     @staticmethod
-    def _ensure_reports_dir(base_dir: str) -> str:
+    def _ensure_reports_dir(base_path: Path) -> Path:
         """Creates and returns the reports directory path."""
-        reports_dir = os.path.join(base_dir, "reports")
-        os.makedirs(reports_dir, exist_ok=True)
+        reports_dir = base_path / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
         return reports_dir
 
     @staticmethod
@@ -99,33 +109,23 @@ class ReportExporter:
         return f"report_{timestamp}_{unique_id}.{format_type}"
 
     @classmethod
-    def export_json(cls, data: List[Dict[str, Any]], base_dir: str, filename: Optional[str] = None) -> str:
-        """
-        Exports analysis results to JSON format.
-
-        Args:
-            data: List of threat dictionaries to export
-            base_dir: Base directory for reports
-            filename: Optional custom filename (without extension)
-
-        Returns:
-            Absolute path of exported file
-
-        Raises:
-            ValueError: If data is empty or invalid
-        """
+    def export_json(cls, data: List[Dict[str, Any]], base_dir: Any, filename: Optional[str] = None) -> str:
+        """Exports analysis results to JSON format."""
         if not data:
             raise ValueError("Cannot export empty data")
 
-        reports_dir = cls._ensure_reports_dir(base_dir)
+        # Ensure reports directory exists
+        base_path = Path(base_dir).resolve()
+        reports_dir = cls._ensure_reports_dir(base_path)
 
         if filename:
-            filename = f"{filename}.json"
+            # Use .name to prevent Path Traversal (takes only the basename)
+            clean_filename = f"{Path(filename).name}.json"
         else:
-            filename = cls._generate_filename("json")
+            clean_filename = cls._generate_filename("json")
 
-        file_path = os.path.join(reports_dir, filename)
-
+        file_path = reports_dir / clean_filename
+        
         export_data = {
             "export_metadata": {
                 "timestamp": datetime.now().isoformat(),
@@ -138,42 +138,29 @@ class ReportExporter:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-        logger.info(f"JSON report exported: {filename} ({len(data)} records)")
-        return file_path
+        logger.info(f"JSON report exported: {sanitize_for_log(clean_filename)} ({len(data)} records)")
+        return str(file_path)
 
     @classmethod
-    def export_csv(cls, data: List[Dict[str, Any]], base_dir: str, filename: Optional[str] = None) -> str:
-        """
-        Exports analysis results to CSV format.
-
-        Args:
-            data: List of threat dictionaries to export
-            base_dir: Base directory for reports
-            filename: Optional custom filename (without extension)
-
-        Returns:
-            Absolute path of exported file
-
-        Raises:
-            ValueError: If data is empty or invalid
-        """
+    def export_csv(cls, data: List[Dict[str, Any]], base_dir: Any, filename: Optional[str] = None) -> str:
+        """Exports analysis results to CSV format."""
         if not data:
             raise ValueError("Cannot export empty data")
 
-        reports_dir = cls._ensure_reports_dir(base_dir)
+        # Ensure reports directory exists
+        base_path = Path(base_dir).resolve()
+        reports_dir = cls._ensure_reports_dir(base_path)
 
         if filename:
-            filename = f"{filename}.csv"
+            clean_filename = f"{Path(filename).name}.csv"
         else:
-            filename = cls._generate_filename("csv")
+            clean_filename = cls._generate_filename("csv")
 
-        file_path = os.path.join(reports_dir, filename)
+        file_path = reports_dir / clean_filename
 
-        # Flatten nested dictionaries for CSV compatibility
         flattened_data = []
         for record in data:
             flat_record = record.copy()
-            # Handle nested dicts by prefixing keys
             for key, value in list(flat_record.items()):
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
@@ -183,7 +170,6 @@ class ReportExporter:
                     flat_record[key] = ", ".join(str(v) for v in value)
             flattened_data.append(flat_record)
 
-        # Get all unique fieldnames across all records
         fieldnames = set()
         for record in flattened_data:
             fieldnames.update(record.keys())
@@ -194,54 +180,50 @@ class ReportExporter:
             writer.writeheader()
             writer.writerows(flattened_data)
 
-        logger.info(f"CSV report exported: {filename} ({len(data)} records)")
-        return file_path
+        logger.info(f"CSV report exported: {sanitize_for_log(clean_filename)} ({len(data)} records)")
+        return str(file_path)
 
     @classmethod
     def export(cls, data: List[Dict[str, Any]], format_type: str, base_dir: str, filename: Optional[str] = None) -> str:
         """
-        Generic export method that dispatches to format-specific exporters.
-
-        Args:
-            data: List of threat dictionaries to export
-            format_type: Export format - "json" or "csv"
-            base_dir: Base directory for reports
-            filename: Optional custom filename (without extension)
-
-        Returns:
-            Absolute path of exported file
-
-        Raises:
-            ValueError: If format_type is not supported
+        Generic export method with strict security validation.
         """
         format_type = format_type.lower()
         if format_type not in cls.ALLOWED_FORMATS:
-            raise ValueError(f"Unsupported format: {format_type}. Allowed: {cls.ALLOWED_FORMATS}")
+            raise ValueError(f"Unsupported format: {format_type}")
 
+        # Strict Path Validation
+        base_path = Path(base_dir).resolve()
+        reports_dir = cls._ensure_reports_dir(base_path)
+        
         if format_type == "json":
-            return cls.export_json(data, base_dir, filename)
+            file_path_str = cls.export_json(data, base_dir, filename)
         else:
-            return cls.export_csv(data, base_dir, filename)
+            file_path_str = cls.export_csv(data, base_dir, filename)
+            
+        # Defense in depth: Verify the final path is actually inside the reports dir
+        file_path = Path(file_path_str)
+        final_path = file_path.resolve()
+        if not str(final_path).startswith(str(reports_dir.resolve())):
+            # This shouldn't happen due to .name usage, but good for security auditing
+            if final_path.exists():
+                final_path.unlink()
+            raise PermissionError("Path Traversal attempt detected and blocked.")
+
+        return str(final_path)
 
     @staticmethod
     def get_report_info(file_path: str) -> Dict[str, Any]:
-        """
-        Returns metadata about an exported report file.
+        """Returns metadata about an exported report file."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Report not found: {sanitize_for_log(file_path)}")
 
-        Args:
-            file_path: Path to the report file
-
-        Returns:
-            Dictionary with file metadata
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Report not found: {file_path}")
-
-        stats = os.stat(file_path)
+        stats = path.stat()
         return {
-            "filename": os.path.basename(file_path),
-            "path": file_path,
+            "filename": path.name,
+            "path": str(path),
             "size_bytes": stats.st_size,
             "created": datetime.fromtimestamp(stats.st_ctime).isoformat(),
-            "format": os.path.splitext(file_path)[1].lower().replace(".", "")
+            "format": path.suffix.lower().replace(".", "")
         }
