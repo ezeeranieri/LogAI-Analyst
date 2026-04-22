@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from main import app
 from src.config import API_KEY
 
-# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+# Test IPs — RFC 5737 (192.0.2.x) reserved range by IANA for documentation and tests
 TEST_IP_1 = "192.0.2.1"
 TEST_IP_2 = "192.0.2.2"
 
@@ -13,8 +13,8 @@ HEADERS = {"X-API-KEY": API_KEY}
 
 def test_analyze_unparsable_timestamps():
     """
-    Verifica que la API NO devuelva un 500 al recibir logs con timestamps corruptos.
-    Debería ignorar los registros malformados y procesar el resto o devolver éxito vacío.
+    Verifies that API does NOT return 500 when receiving logs with corrupted timestamps.
+    Should ignore malformed records and process the rest or return empty success.
     """
     log_content = (
         f"INVALID_TIMESTAMP server sshd[123]: Failed password for root from {TEST_IP_1}\n"
@@ -29,18 +29,18 @@ def test_analyze_unparsable_timestamps():
         headers=HEADERS
     )
     
-    # No debe dar 500
+    # Should not return 500
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    # El primer registro es inválido y se dropea. El segundo es válido pero no dispara reglas solo.
-    # Así que total_threats debería ser 0 o mayor si hay reglas que disparen con 1 fila.
-    # Lo importante es que NO sea un 500.
+    # First record is invalid and gets dropped. Second is valid but doesn't trigger rules alone.
+    # So total_threats should be 0 or higher if there are rules that trigger with 1 row.
+    # The important thing is that it's NOT a 500.
     assert "total_threats" in data
 
 def test_analyze_completely_corrupt_file():
     """
-    Verifica archivo completamente basura.
+    Verifies completely garbage file.
     """
     log_content = "This is not a log file at all.\nSecond line of garbage."
     file = io.BytesIO(log_content.encode("utf-8"))

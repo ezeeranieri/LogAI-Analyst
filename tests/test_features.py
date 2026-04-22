@@ -4,15 +4,15 @@ import pandas as pd
 from datetime import datetime
 from src.features import extract_features
 
-# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+# Test IPs — RFC 5737 (192.0.2.x) reserved range by IANA for documentation and tests
 TEST_IP_1 = "192.0.2.1"
 TEST_IP_2 = "192.0.2.2"
 
 
 def test_extract_features_produces_expected_columns():
     """
-    Verifica que extract_features produce las 3 columnas esperadas:
-    hour, ip_encoded, status_val
+    Verifies that extract_features produces the 4 expected columns:
+    hour, ip_encoded, status_val, fail_ratio_per_ip
     """
     data = {
         'datetime': [datetime(2026, 10, 11, 14, 30, 0)],
@@ -23,13 +23,18 @@ def test_extract_features_produces_expected_columns():
 
     features = extract_features(df)
 
-    assert list(features.columns) == ['hour', 'ip_encoded', 'status_val']
+    expected_cols = [
+        'hour', 'ip_encoded', 'status_val', 'fail_ratio_per_ip',
+        'requests_per_minute', 'unique_users_per_ip', 'url_entropy',
+        'unique_urls_per_ip'
+    ]
+    assert sorted(list(features.columns)) == sorted(expected_cols)
     assert len(features) == 1
 
 
 def test_extract_features_hour_extraction():
     """
-    Verifica que la hora se extrae correctamente del datetime.
+    Verifies that hour is correctly extracted from datetime.
     """
     data = {
         'datetime': [
@@ -60,17 +65,17 @@ def test_extract_features_ip_hash_deterministic():
     }
     df = pd.DataFrame(data)
 
-    # Llamar dos veces con los mismos datos
+    # Call twice with same data
     features1 = extract_features(df)
     features2 = extract_features(df)
 
-    # El hash debe ser idéntico
+    # Hash should be identical
     assert features1['ip_encoded'].iloc[0] == features2['ip_encoded'].iloc[0]
 
 
 def test_extract_features_different_ips_produce_different_hashes():
     """
-    Verifica que diferentes IPs producen diferentes hashes.
+    Verifies that different IPs produce different hashes.
     """
     data = {
         'datetime': [datetime(2026, 10, 11, 10, 0, 0), datetime(2026, 10, 11, 10, 0, 0)],
@@ -81,13 +86,13 @@ def test_extract_features_different_ips_produce_different_hashes():
 
     features = extract_features(df)
 
-    # Diferentes IPs deben tener diferentes hashes
+    # Different IPs should have different hashes
     assert features['ip_encoded'].iloc[0] != features['ip_encoded'].iloc[1]
 
 
 def test_extract_features_status_mapping():
     """
-    Verifica que el mapeo de status es correcto:
+    Verifies that status mapping is correct:
     SUCCESS=1, FAIL=0, INFO=0.5
     """
     data = {
@@ -110,7 +115,7 @@ def test_extract_features_status_mapping():
 
 def test_extract_features_unknown_status_defaults():
     """
-    Verifica que status desconocidos usan el default de 0.5.
+    Verifies that unknown statuses use the default of 0.5.
     """
     data = {
         'datetime': [datetime(2026, 10, 11, 10, 0, 0)],
@@ -126,7 +131,7 @@ def test_extract_features_unknown_status_defaults():
 
 def test_extract_features_preserves_index():
     """
-    Verifica que el índice del DataFrame original se preserva.
+    Verifies that the original DataFrame index is preserved.
     """
     data = {
         'datetime': [datetime(2026, 10, 11, 10, 0, 0)],
@@ -138,3 +143,26 @@ def test_extract_features_preserves_index():
     features = extract_features(df)
 
     assert features.index[0] == 42
+
+
+def test_extract_features_fail_ratio_per_ip():
+    """
+    Verifies that fail_ratio_per_ip is correctly calculated as the ratio
+    of FAIL statuses for each IP in the batch.
+    """
+    data = {
+        'datetime': [datetime(2026, 10, 11, 10, 0, 0)] * 10,
+        'ip_origen': [TEST_IP_1] * 5 + [TEST_IP_2] * 5,
+        'status': [
+            'SUCCESS', 'FAIL', 'SUCCESS', 'FAIL', 'SUCCESS',    # IP_1: 2 fails / 5 events = 0.4
+            'FAIL', 'FAIL', 'FAIL', 'FAIL', 'SUCCESS'          # IP_2: 4 fails / 5 events = 0.8
+        ]
+    }
+    df = pd.DataFrame(data)
+
+    features = extract_features(df)
+
+    # IP_1 ratio: 2 fail / 5 events = 0.4
+    assert features['fail_ratio_per_ip'].iloc[0] == pytest.approx(0.4)
+    # IP_2 ratio: 4 fail / 5 events = 0.8
+    assert features['fail_ratio_per_ip'].iloc[5] == pytest.approx(0.8)

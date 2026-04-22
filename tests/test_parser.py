@@ -2,15 +2,15 @@ import pytest
 import pandas as pd
 from src.parser import AuthLogParser
 
-# IPs de prueba — RFC 5737 (192.0.2.x) rango reservado por IANA para documentación y tests
+# Test IPs — RFC 5737 (192.0.2.x) reserved range by IANA for documentation and tests
 TEST_IP_FAIL = "192.0.2.1"
 TEST_IP_SUCCESS = "192.0.2.2"
 
 def test_parse_single_line_failed(tmp_path):
     """
-    Valida que una línea de fallo de autenticación se parsee
-    correctamente con el status FAIL y extracción de usuario/IP.
-    Utiliza el fixture tmp_path para gestión segura de archivos temporales.
+    Validates that an authentication failure line is parsed
+    correctly with FAIL status and user/IP extraction.
+    Uses tmp_path fixture for safe temporary file management.
     """
     d = tmp_path / "subdir"
     d.mkdir()
@@ -29,7 +29,7 @@ def test_parse_single_line_failed(tmp_path):
 
 def test_parse_success_line(tmp_path):
     """
-    Valida la normalización a SUCCESS de un acceso aceptado usando tmp_path.
+    Validates SUCCESS normalization of an accepted access using tmp_path.
     """
     log_file = tmp_path / "test_success.log"
     line = f"Oct 11 12:00:00 server sshd[456]: Accepted password for admin from {TEST_IP_SUCCESS}"
