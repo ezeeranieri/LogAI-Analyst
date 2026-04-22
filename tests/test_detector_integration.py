@@ -7,7 +7,7 @@ from src.detector import (
 )
 from src.normalization import normalize_df
 
-def test_detector_full_integration():
+def test_detector_full_integration(test_ips):
     """
     High-level integration test for the LogDetector with multiple rules.
     Verifies that different types of attacks (Auth, Web, ML) can be
@@ -18,16 +18,16 @@ def test_detector_full_integration():
     
     data = [
         # Normal traffic
-        {"datetime": base_time, "ip_origen": "1.1.1.1", "status": "SUCCESS", "usuario": "alice", "url": "/index.html"},
+        {"datetime": base_time, "ip_origen": test_ips["NORMAL"], "status": "SUCCESS", "usuario": "alice", "url": "/index.html"},
         
         # Brute Force Burst (6 attempts in 30s)
-        *[{"datetime": base_time + timedelta(seconds=i), "ip_origen": "2.2.2.2", "status": "FAIL", "usuario": "admin", "url": "/login"} for i in range(6)],
+        *[{"datetime": base_time + timedelta(seconds=i), "ip_origen": test_ips["BRUTE_FORCE"], "status": "FAIL", "usuario": "admin", "url": "/login"} for i in range(6)],
         
         # SQL Injection attempt
-        {"datetime": base_time + timedelta(minutes=5), "ip_origen": "3.3.3.3", "status": "FAIL", "usuario": "guest", "url": "/search?id=1' OR '1'='1"},
+        {"datetime": base_time + timedelta(minutes=5), "ip_origen": test_ips["SQL_INJECTION"], "status": "FAIL", "usuario": "guest", "url": "/search?id=1' OR '1'='1"},
         
         # XSS attempt (URL encoded)
-        {"datetime": base_time + timedelta(minutes=6), "ip_origen": "4.4.4.4", "status": "FAIL", "usuario": "guest", "url": "/profile?name=%3Cscript%3Ealert(1)%3C/script%3E"},
+        {"datetime": base_time + timedelta(minutes=6), "ip_origen": test_ips["XSS"], "status": "FAIL", "usuario": "guest", "url": "/profile?name=%3Cscript%3Ealert(1)%3C/script%3E"},
     ]
     
     df_raw = pd.DataFrame(data)
@@ -50,19 +50,19 @@ def test_detector_full_integration():
     # Check for Brute Force
     bf_hits = results[results['reason'].str.contains("Brute Force", case=False)]
     assert len(bf_hits) >= 1, "Should detect brute force burst"
-    assert "2.2.2.2" in bf_hits['ip_origen'].values
+    assert test_ips["BRUTE_FORCE"] in bf_hits['ip_origen'].values
     
     # Check for SQL Injection
     sqli_hits = results[results['reason'].str.contains("SQL Injection", case=False)]
     assert len(sqli_hits) >= 1, "Should detect SQL injection"
-    assert "3.3.3.3" in sqli_hits['ip_origen'].values
+    assert test_ips["SQL_INJECTION"] in sqli_hits['ip_origen'].values
     
     # Check for XSS
     xss_hits = results[results['reason'].str.contains("XSS", case=False)]
     assert len(xss_hits) >= 1, "Should detect XSS (needs normalization)"
-    assert "4.4.4.4" in xss_hits['ip_origen'].values
+    assert test_ips["XSS"] in xss_hits['ip_origen'].values
 
-def test_isolation_forest_rule_integration():
+def test_isolation_forest_rule_integration(test_ips):
     """Validates the IsolationForestRule with a mock/simple setup."""
     detector = LogDetector()
     # Mocking model presence is hard without training, but we can check it doesn't crash
@@ -72,7 +72,7 @@ def test_isolation_forest_rule_integration():
     
     df = pd.DataFrame({
         "datetime": [datetime.now()],
-        "ip_origen": ["1.1.1.1"],
+        "ip_origen": [test_ips["NORMAL"]],
         "status": ["SUCCESS"],
         "usuario": ["admin"],
         "url": ["/"]
