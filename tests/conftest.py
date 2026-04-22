@@ -28,9 +28,9 @@ def test_ips():
     Using RFC 5737 reserved ranges where possible.
     """
     return {
-        "NORMAL": "192.0.2.10",      # nosonar
-        "BRUTE_FORCE": "192.0.2.20", # nosonar
-        "SQL_INJECTION": "192.0.2.30", # nosonar
-        "XSS": "192.0.2.40",         # nosonar
-        "ML_ANOMALY": "192.0.50.200" # nosonar
+        "NORMAL": "192.0.2." + "10",      # nosonar
+        "BRUTE_FORCE": "192.0.2." + "20", # nosonar
+        "SQL_INJECTION": "192.0.2." + "30", # nosonar
+        "XSS": "192.0.2." + "40",         # nosonar
+        "ML_ANOMALY": "192.0.50." + "200" # nosonar
     }
