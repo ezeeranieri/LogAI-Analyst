@@ -5,9 +5,11 @@ from datetime import datetime, timedelta
 from src.detector import LogDetector, BruteForceRule, TimeAnomalyRule, UserProbingRule, IsolationForestRule
 
 # Test IPs — RFC 5737 (192.0.2.x) reserved range by IANA for documentation and tests
-TEST_IP_BRUTE_FORCE = "192.0.2.1"
-TEST_IP_USER_PROBING = "192.0.2.2"
-TEST_IP_TIME_ANOMALY = "192.0.2.3"
+TEST_IP_BRUTE_FORCE = "192.0.2.1"      # nosonar: IP segura para entorno de test
+TEST_IP_USER_PROBING = "192.0.2.2"     # nosonar: IP segura para entorno de test
+TEST_IP_TIME_ANOMALY = "192.0.2.3"     # nosonar: IP segura para entorno de test
+TEST_IP_ISOLATION_FOREST = "192.0.50.200"  # nosonar: IP para entrenamiento de ML
+TEST_IP_WEB_LOG = "192.0.2.100"        # nosonar: IP para simulación de logs web
 
 
 def _create_log_entries(base_time: datetime, count: int, ip: str, user: str,
@@ -172,7 +174,7 @@ def test_ia_detector_with_synthetic_anomalies():
             datetime(2026, 10, 11, int(h), 0, 0)
             for h in rng.integers(8, 18, n_normal)
         ],
-        'ip_origen': [f"192.0.2.{i % 50 + 1}" for i in range(n_normal)],
+        'ip_origen': [f"192.0.2.{i % 50 + 1}" for i in range(n_normal)],  # nosonar: Generación dinámica para entrenamiento
         'status': ['SUCCESS'] * n_normal,
     })
 
@@ -189,7 +191,7 @@ def test_ia_detector_with_synthetic_anomalies():
     df_anomalous = _create_log_entries(
         base_time=base_time,
         count=15,
-        ip="192.0.50.200",   # IP not seen in training
+        ip=TEST_IP_ISOLATION_FOREST,
         user='root',
         action='Failed password',
         status='FAIL',
@@ -229,7 +231,7 @@ def test_ia_detector_insufficient_data():
     df = _create_log_entries(
         base_time=base_time,
         count=3,
-        ip="192.0.2.1",
+        ip=TEST_IP_BRUTE_FORCE,
         user='root',
         action='Failed password',
         status='FAIL',
@@ -264,7 +266,7 @@ def test_logdetector_groupby_with_none_usuario_accion():
         rows.append({
             'timestamp': (base_time + timedelta(minutes=i)).strftime('%b %d %H:%M:%S'),
             'datetime': base_time + timedelta(minutes=i),
-            'ip_origen': '192.0.2.100',
+            'ip_origen': TEST_IP_WEB_LOG,
             'usuario': None,       # No authenticated user (web log)
             'accion': None,        # No action string (web log)
             'status': 'SUCCESS',   # HTTP 200 at 3 AM
@@ -281,6 +283,6 @@ def test_logdetector_groupby_with_none_usuario_accion():
         "Web log anomalies with usuario=None/accion=None must NOT be dropped by groupby"
     )
     # All detected rows had the same IP
-    assert (result['ip_origen'] == '192.0.2.100').all()
+    assert (result['ip_origen'] == TEST_IP_WEB_LOG).all()
     # Reason must be set (not None/NaN)
     assert result['reason'].notna().all()
