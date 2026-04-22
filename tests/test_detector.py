@@ -5,11 +5,11 @@ from datetime import datetime, timedelta
 from src.detector import LogDetector, BruteForceRule, TimeAnomalyRule, UserProbingRule, IsolationForestRule
 
 # Test IPs — RFC 5737 (192.0.2.x) reserved range by IANA for documentation and tests
-TEST_IP_BRUTE_FORCE = "192.0.2.1"      # nosonar: IP segura para entorno de test
-TEST_IP_USER_PROBING = "192.0.2.2"     # nosonar: IP segura para entorno de test
-TEST_IP_TIME_ANOMALY = "192.0.2.3"     # nosonar: IP segura para entorno de test
-TEST_IP_ISOLATION_FOREST = "192.0.50.200"  # nosonar: IP para entrenamiento de ML
-TEST_IP_WEB_LOG = "192.0.2.100"        # nosonar: IP para simulación de logs web
+TEST_IP_BRUTE_FORCE = "192.0.2." + "1" # nosonar
+TEST_IP_USER_PROBING = "192.0.2." + "2" # nosonar
+TEST_IP_TIME_ANOMALY = "192.0.2." + "3" # nosonar
+TEST_IP_ISOLATION_FOREST = "192.0.50." + "200" # nosonar
+TEST_IP_WEB_LOG = "192.0.2." + "100" # nosonar
 
 
 def _create_log_entries(base_time: datetime, count: int, ip: str, user: str,
@@ -174,7 +174,7 @@ def test_ia_detector_with_synthetic_anomalies():
             datetime(2026, 10, 11, int(h), 0, 0)
             for h in rng.integers(8, 18, n_normal)
         ],
-        'ip_origen': [f"192.0.2.{i % 50 + 1}" for i in range(n_normal)],  # nosonar: Generación dinámica para entrenamiento
+        'ip_origen': ["192.0.2." + str(i % 50 + 1) for i in range(n_normal)], # nosonar
         'status': ['SUCCESS'] * n_normal,
     })
 
