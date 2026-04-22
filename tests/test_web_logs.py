@@ -25,6 +25,7 @@ class TestWebLogParsing:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert df is not None, "AuthLogParser.parse() returned None for Nginx access log"
         assert not df.empty
         assert df.iloc[0]['ip_origen'] == TEST_IP
         assert df.iloc[0]['method'] == "GET"
@@ -44,6 +45,7 @@ class TestWebLogParsing:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert df is not None, "AuthLogParser.parse() returned None for Apache error log"
         assert not df.empty
         assert df.iloc[0]['ip_origen'] == "192.0.2.1"
         assert df.iloc[0]['status'] == "FAIL"
@@ -66,6 +68,7 @@ class TestWebLogParsing:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert df is not None, "AuthLogParser.parse() returned None for multiple web log entries"
         assert len(df) == 3
         # Use sorted comparison to avoid order dependency
         assert sorted(df['method'].tolist()) == sorted(["GET", "POST", "GET"])
@@ -87,6 +90,7 @@ class TestWebLogParsing:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert df is not None, "AuthLogParser.parse() returned None during status classification test"
         statuses = df['status'].tolist()
         assert statuses == ["SUCCESS", "SUCCESS", "FAIL", "FAIL"]
 
@@ -108,6 +112,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None"
         assert len(anomalies) == 2
         assert all("SQL Injection" in reason for reason in anomalies['reason'])
 
@@ -132,6 +137,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None for quote/comment patterns"
         assert len(anomalies) == 2
 
     def test_detects_encoded_sql_injection(self):
@@ -153,6 +159,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None for encoded payloads"
         assert len(anomalies) == 2, (
             "URL-encoded SQL injection payloads must be detected after unquote_plus decoding"
         )
@@ -171,6 +178,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None for normal URLs"
         assert anomalies.empty
 
     def test_no_false_positives_apostrophe_in_url(self):
@@ -197,6 +205,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None for apostrophe regression test"
         assert anomalies.empty, (
             f"Legitimate URLs with apostrophes should NOT be flagged as SQL injection. "
             f"Got detections for: {list(df['url'][anomalies.index]) if not anomalies.empty else []}"
@@ -226,6 +235,7 @@ class TestSQLInjectionDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "SQLInjectionRule.evaluate() returned None for hash fragment regression test"
         assert anomalies.empty, (
             f"URLs with '#' hash fragments should NOT be flagged as SQL injection. "
             f"Got detections for: {list(df['url'][anomalies.index]) if not anomalies.empty else []}"
@@ -250,6 +260,7 @@ class TestXSSDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "XSSRule.evaluate() returned None"
         assert len(anomalies) == 1
         assert "XSS Attack" in anomalies.iloc[0]['reason']
 
@@ -268,6 +279,7 @@ class TestXSSDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "XSSRule.evaluate() returned None for javascript protocol"
         assert len(anomalies) == 1
 
     def test_detects_xss_in_user_agent(self):
@@ -285,6 +297,7 @@ class TestXSSDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "XSSRule.evaluate() returned None for user agent XSS"
         assert len(anomalies) == 1
 
 
@@ -305,6 +318,7 @@ class TestPathTraversalDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "PathTraversalRule.evaluate() returned None"
         assert len(anomalies) == 1
         assert "Path Traversal" in anomalies.iloc[0]['reason']
 
@@ -323,6 +337,7 @@ class TestPathTraversalDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "PathTraversalRule.evaluate() returned None for encoded patterns"
         assert len(anomalies) == 1
 
     def test_detects_windows_path_traversal(self):
@@ -339,6 +354,7 @@ class TestPathTraversalDetection:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "PathTraversalRule.evaluate() returned None for Windows patterns"
         assert len(anomalies) == 1
 
 
@@ -360,6 +376,7 @@ class TestWebAttackRule:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "WebAttackRule.evaluate() returned None"
         assert len(anomalies) == 1
         assert "sql_injection" in anomalies.iloc[0]['reason']
         assert "xss" in anomalies.iloc[0]['reason']
@@ -373,6 +390,7 @@ class TestWebAttackRule:
 
         anomalies = rule.evaluate(df)
 
+        assert anomalies is not None, "WebAttackRule.evaluate() returned None for empty DataFrame"
         assert anomalies.empty
 
 
@@ -389,6 +407,7 @@ class TestFormatAutoDetection:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert parser.active_parser is not None, "Auto-detection failed: active_parser is None for syslog"
         assert parser.detected_format == AuthLogParser.LOG_FORMAT_SYSLOG
 
     def test_detects_web_log_format(self, tmp_path):
@@ -401,4 +420,5 @@ class TestFormatAutoDetection:
         parser = AuthLogParser(str(log_file))
         df = parser.parse()
 
+        assert parser.active_parser is not None, "Auto-detection failed: active_parser is None for nginx web log"
         assert parser.detected_format == AuthLogParser.LOG_FORMAT_NGINX
